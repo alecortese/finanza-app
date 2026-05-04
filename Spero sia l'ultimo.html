@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="it">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <title>Finanza</title>
+
+        <link rel="apple-touch-icon" href="icon.png">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+        <style>
+
+            /* =========================
+            🎨 THEME
+            ========================= */
+            body{
+                margin:0;
+                font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+                background:#f5f5f7;
+                color:#1c1c1e;
+            }
+
+            body.dark{
+                background:#000;
+                color:#fff;
+            }
+
+            /* =========================
+            💎 UI BASE
+            ========================= */
+            .card{
+                background:rgba(255,255,255,0.8);
+                backdrop-filter:blur(20px);
+                margin:12px;
+                padding:16px;
+                border-radius:20px;
+                box-shadow:0 10px 25px rgba(0,0,0,0.08);
+                /* In caso da eliminare */
+                width:fit-content;
+            }
+
+            body.dark .card{
+                background:rgba(28,28,30,0.8);
+            }
+
+            .input, select{
+                width:fit-content;
+                padding:12px;
+                margin-top:8px;
+                border-radius:12px;
+                border:1px solid #ddd;
+            }
+                
+            button{
+                width:fit-content;
+                padding:12px;
+                margin-top:10px;
+                border:none;
+                border-radius:12px;
+                font-weight:600;
+                color:white;
+            }
+
+            .hero{
+                
+                margin:12px;
+                padding:18px;
+                border-radius:20px;
+                background:linear-gradient(135deg,#0071e3,#34c759);
+                color:white;
+                text-align: center;
+            }
+
+            .income{background:#34c759;}
+            .expense{background:#ff3b30;}
+            .primary{background:#0071e3;}
+
+            /* =========================
+            📲 NAVIGATION (FAKE REACT)
+            ========================= */
+            .tab{
+                display:none;
+                animation:fade .2s ease;
+            }
+
+            .tab.active{
+                display:block;
+            }
+
+            @keyframes fade{
+                from{opacity:0;transform:translateY(10px);}
+                to{opacity:1;transform:translateY(0);}
+            }
+
+            .tabbar{
+                position:fixed;
+                bottom:0;
+                width:100%;
+                display:flex;
+                justify-content:space-around;
+                background:rgba(255,255,255,0.8);
+                backdrop-filter:blur(20px);
+                padding:10px 0;
+            }
+
+            body.dark .tabbar{
+            background:rgba(28,28,30,0.8);
+            }
+
+            .tabbar button{
+            background:none;
+            border:none;
+            font-size:20px;
+            }
+
+            /* spacing */
+            .card + .card{margin-top:12px;}
+
+            .switch {
+                position: relative;
+                display: inline-block;
+                width: 60px;
+                height: 30px;
+                margin-left: 10px;
+            }
+
+            .switch input {
+                display: none;
+            }
+
+            .slider {
+                position: absolute;
+                cursor: pointer;
+                background: #ccc;
+                border-radius: 30px;
+                top: 0; left: 0; right: 0; bottom: 0;
+                transition: 0.3s;
+                display: flex;
+                align-items: center;
+                padding: 0 5px;
+            }
+
+            .slider .icon {
+                font-size: 16px;
+                transition: 0.3s;
+                margin-left: 3px;
+            }
+
+            input:checked + .slider {
+                background: #34c759;
+            }
+
+            input:checked + .slider .icon {
+                transform: translateX(28px);
+            }
+
+        </style>
+
+        <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    </head>
+    <body>
+        <!-- =========================
+        🧠 APP STATE (FAKE REACT STORE)
+        ========================= -->
+        <script>
+            let AppState = {
+                data: JSON.parse(localStorage.getItem("finance")) || [],
+                chart:null,
+                yearChart:null,
+                lostChart:null
+            };
+
+            const firebaseConfig = {
+                apiKey: "AIzaSyCYnEy2fR-02i62ekHWdUOcYl2LyRQM0zE",
+                authDomain: "finanze-af70e.firebaseapp.com",
+                databaseURL: "https://finanze-af70e-default-rtdb.europe-west1.firebasedatabase.app",
+                projectId: "finanze-af70e",
+                storageBucket: "finanze-af70e.firebasestorage.app",
+                messagingSenderId: "393257287707",
+                appId: "1:393257287707:web:ea404278c3b220c6daf8be"
+            };
+
+            firebase.initializeApp(firebaseConfig);
+            const db = firebase.database();
+
+            db.ref("finance").on("value", snap => {
+
+            let d = snap.val();
+
+            if(d && d.data){
+                AppState.data = d.data;
+                render(); // aggiorna UI automaticamente
+            }
+
+            });
+
+            function save(){
+
+                // salva anche offline
+                localStorage.setItem("finance", JSON.stringify(AppState.data));
+
+                // salva cloud
+                db.ref("finance").set({
+                    data: AppState.data
+                });
+
+                render();
+            }
+        </script>
+
+        <!-- =========================
+        🏠 HEADER COMPONENT
+        ========================= -->
+        <div class="card">
+            📊 Finance Pro
+        
+            <label class="switch">
+                <input type="checkbox" id="darkToggle" onchange="toggleDark()">
+                <span class="slider">
+                    <span class="icon">🌙</span>
+                </span>
+            </label>
+        </div>
+
+        <!-- =========================
+        🏠 HOME COMPONENT
+        ========================= -->
+        <div id="home" class="tab active">
+            <div class="hero">
+                💰 FINANZE
+                <div class="balance" id="total">0€</div>
+            </div>
+
+            <div class="card">
+                <h3>📜 Storico mese</h3>
+                <div id="history"></div>
+            </div>
+        </div>
+
+        <!-- =========================
+        ➕ ADD COMPONENT
+        ========================= -->
+        <div id="add" class="tab">
+
+            <div class="card">
+                <h3>💰 Add Transaction</h3>
+                <input id="desc" class="input" placeholder="Descrizione">
+                <input id="amount" class="input" type="number" placeholder="Importo">
+
+                <p>
+                    <select id="category">
+                        <option>Bar</option>
+                        <option>Ristoranti</option>
+                        <option>Divertimento</option>
+                        <option>Trasporti</option>
+                        <option>Casa</option>
+                        <option>Altro</option>
+                    </select>
+
+                    <select id="month">
+                        <option>Gennaio</option><option>Febbraio</option><option>Marzo</option>
+                        <option>Aprile</option><option>Maggio</option><option>Giugno</option>
+                        <option>Luglio</option><option>Agosto</option><option>Settembre</option>
+                        <option>Ottobre</option><option>Novembre</option><option>Dicembre</option>
+                    </select>
+                </p>
+
+                <p>
+                    <select id="method">
+                        <option>Banca</option>
+                        <option>Contanti</option>
+                        <option>Revolut</option>
+                        <option>Altro</option>
+                    </select>
+                </p>
+
+                <p>
+                    <button type="button" class="income" onclick="add(true)">+ Entrata</button>
+                    <button type="button" class="expense" onclick="add(false)">- Uscita</button>
+                </p>
+            </div>
+
+            <div class="card">
+                💰 Totale mese: <b id="total">0€</b>
+            </div>
+
+        </div>
+
+        <!-- =========================
+        📊 STATS COMPONENT
+        ========================= -->
+        <div id="stats" class="tab">
+
+            <div class="card">
+                <h3>📊 Categorie</h3>
+                <canvas id="chart"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>📈 Annuale</h3>
+                <canvas id="yearChart"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>💳 Metodo pagamento</h3>
+                <canvas id="methodChart"></canvas>
+              </div>
+
+        </div>
+
+        <!-- =========================
+        🎯 GOALS COMPONENT
+        ========================= -->
+        <div id="goals" class="tab">
+
+            <div class="card">
+                <h3>🎯 AI Obiettivi</h3>
+                <div id="goalsBox"></div>
+            </div>
+
+        </div>
+
+        <!-- =========================
+        🧠 AI COMPONENT
+        ========================= -->
+        <div id="ai" class="tab">
+
+            <div class="card">
+                <h3>🧠 AI Coach</h3>
+                <div id="aiBox"></div>
+            </div>
+
+        </div>
+
+        <!-- =========================
+        💼 CEO COMPONENT
+        ========================= -->
+        <div id="ceo" class="tab">
+
+            <div class="card">
+                <h3>💼 CEO Dashboard</h3>
+                <div id="ceoBox"></div>
+            </div>
+
+        </div>
+
+        <!-- =========================
+        📲 TAB BAR COMPONENT
+        ========================= -->
+        <div class="tabbar">
+            <button onclick="show('home')">🏠</button>
+            <button onclick="show('add')"> ➕</button>
+            <button onclick="show('stats')">📊</button>
+            <button onclick="show('goals')">🎯</button>
+            <button onclick="show('ai')">🧠</button>
+            <button onclick="show('ceo')">💼</button>
+        </div>
+
+        <!-- =========================
+         ⚙️ LOGIC (FAKE REACT HOOKS)
+        ========================= -->
+        <script>
+
+            let lastDeleted = null;
+            let lastIndex = null;
+
+            /* =========================
+            🔄 NAVIGATION
+            ========================= */
+            function show(tab){
+                document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+                document.getElementById(tab).classList.add("active");
+            }
+
+            /* =========================
+            ➕ ADD TRANSACTION
+            ========================= */
+            function add(isIncome){
+
+                console.log("CLICK");
+
+                let d=document.getElementById("desc").value;
+                let a=parseFloat(document.getElementById("amount").value);
+                let c=document.getElementById("category").value;
+                let m=document.getElementById("month").value;
+
+                if(d === "" || isNaN(a)){
+                    alert("Inserisci descrizione e importo validi");
+                    return;
+                }
+
+                AppState.data.push({
+                    desc:d,
+                    amount:isIncome?a:-a,
+                    category:c,
+                    month:m,
+                    method:method
+                });
+
+                save();
+                render();
+            }
+
+            /* =========================
+            🧠 RENDER (LIKE REACT RERENDER)
+            ========================= */
+            function render(){
+
+                let month=document.getElementById("month")?.value || "Gennaio";
+                let total=0;
+                let cat={};
+                let inc=0;
+                let out=0;
+
+                AppState.data.forEach(i=>{
+                    if(i.month!==month) return;
+
+                    total+=i.amount;
+
+                    if(i.amount>=0){
+                        inc+=i.amount;
+                    }else{
+                        out+=Math.abs(i.amount);
+                    }
+
+                    cat[i.category]=(cat[i.category]||0)+Math.abs(i.amount);
+                });
+
+                document.querySelectorAll("#total").forEach(el=>{
+                    el.innerText = total+"€";
+                });
+
+                renderCharts(cat);
+                renderAI();
+                renderGoals();
+                renderCEO(inc, out, total);
+                renderHistory(month);
+                renderMethodChart(month)
+            }
+
+            /* =========================
+            📊 CHARTS COMPONENT
+            ========================= */
+            function renderCharts(cat){
+
+                let canvas = document.getElementById("chart");
+                if(!canvas) return;
+
+                if(AppState.chart) AppState.chart.destroy();
+
+                AppState.chart = new Chart(canvas,{
+                    type:"doughnut",
+                    data:{
+                        labels:Object.keys(cat),
+                        datasets:[{
+                            data:Object.values(cat),
+                            backgroundColor:["#34c759","#ff3b30","#0071e3","#ff9500"]
+                        }]
+                    }
+                });
+            }
+
+            function renderMethodChart(month){
+
+                let map = {};
+
+                AppState.data.forEach(i=>{
+                if(i.month !== month) return;
+
+                let key = i.method || "Altro";
+
+                map[key] = (map[key] || 0) + Math.abs(i.amount);
+                });
+
+                if(AppState.methodChart) AppState.methodChart.destroy();
+
+                AppState.methodChart = new Chart(document.getElementById("methodChart"),{
+                type:"doughnut",
+                data:{
+                    labels:Object.keys(map),
+                    datasets:[{
+                    data:Object.values(map),
+                    backgroundColor:[
+                        "#0071e3", // banca
+                        "#34c759", // contanti
+                        "#ff9500"  // altro
+                    ]
+                    }]
+                }
+                });
+
+            }
+
+            /* =========================
+            🧠 AI COMPONENT (SMARTER)
+            ========================= */
+            function renderAI(){
+
+                let income=0,expense=0;
+                let map={};
+
+                AppState.data.forEach(i=>{
+                    i.amount>=0?income+=i.amount:expense+=Math.abs(i.amount);
+
+                    if(i.amount<0){
+                        map[i.category]=(map[i.category]||0)+Math.abs(i.amount);
+                    }
+                });
+
+                let top=Object.entries(map).sort((a,b)=>b[1]-a[1])[0];
+
+                let risk = income === 0
+                ? "⚠️ Nessuna entrata registrata"
+                : (expense / income > 0.85
+                ? "⚠️ Stai spendendo troppo rispetto alle entrate"
+                : "📊 Situazione sana");
+                document.getElementById("aiBox").innerHTML=`
+                💰 Entrate: ${income}€<br>
+                💸 Uscite: ${expense}€<br>
+                ${risk}<br><br>
+                💡 Taglio consigliato: ${top?top[0]:"-"}`;
+            }
+
+            /* =========================
+            🎯 GOALS COMPONENT
+            ========================= */
+            function renderGoals(){
+
+                let inc=0,out=0;
+
+                AppState.data.forEach(i=>{
+                    i.amount>=0?inc+=i.amount:out+=Math.abs(i.amount);
+                });
+
+                let save=(inc-out)*0.2;
+
+                document.getElementById("goalsBox").innerHTML=
+                `💰 Risparmio consigliato: <b>${save.toFixed(0)}€</b>`;
+            }
+
+            function renderCEO(inc, out, total){
+
+                let status =
+                    (inc - out) < 0 ? "🔴 Negativo"
+                    : "🟢 Positivo";
+
+                document.getElementById("ceoBox").innerHTML = `
+                    💼 Totale: ${total}€<br>
+                    📊 Mese: ${inc - out}€<br>
+                    ⚡ Stato: ${status}
+                `;
+            }
+
+            function renderHistory(month){
+
+                let box = document.getElementById("history");
+                if(!box) return;
+
+                box.innerHTML = "";
+
+                let filtered = AppState.data
+                .map((item, index)=>({...item, index}))
+                .filter(i => i.month === month)
+                .reverse();
+
+                filtered.forEach(item => {
+
+                    let div = document.createElement("div");
+                    div.style.display = "flex";
+                    div.style.justifyContent = "space-between";
+                    div.style.marginBottom = "8px";
+
+                    div.innerHTML = `
+                        <span>
+                        ${item.desc} (${item.category})<br>
+                        <small>${item.amount > 0 ? "+" : ""}${item.amount}€</small>
+                        </span>
+
+                        <button onclick="deleteItem(${item.index})" 
+                                style="background:#ff3b30;padding:6px 10px;">
+                        ❌
+                        </button>
+                    `;
+
+                    box.appendChild(div);
+                });
+
+            }
+
+            function deleteItem(index){
+
+                lastDeleted = AppState.data[index];
+                lastIndex = index;
+
+                AppState.data.splice(index, 1);
+
+                save();
+                render();
+
+                showUndo();
+            }
+
+            function showUndo(){
+
+                let undo = document.createElement("div");
+
+                undo.innerHTML = `
+                <div style="
+                    position:fixed;
+                    bottom:80px;
+                    left:50%;
+                    transform:translateX(-50%);
+                    background:#1c1c1e;
+                    color:white;
+                    padding:12px 18px;
+                    border-radius:14px;">
+                    
+                    Eliminato
+                    <button onclick="undoDelete()" 
+                            style="margin-left:10px;background:#34c759;">
+                    Annulla
+                    </button>
+                </div>
+                `;
+
+                document.body.appendChild(undo);
+
+                setTimeout(()=>undo.remove(), 4000);
+            }
+
+            function undoDelete(){
+
+                if(lastDeleted !== null){
+
+                    AppState.data.splice(lastIndex, 0, lastDeleted);
+
+                    save();
+                    render();
+
+                    lastDeleted = null;
+                }
+
+            }
+
+            /* INIT */
+            render();
+
+        </script>
+
+        <script>
+            function toggleDark() {
+                document.body.classList.toggle("dark");
+
+                let isDark = document.body.classList.contains("dark");
+
+                localStorage.setItem("darkMode", isDark);
+
+                document.querySelector(".icon").textContent = isDark ? "☀️" : "🌙";
+            }
+
+            window.onload = function () {
+                let saved = localStorage.getItem("darkMode");
+
+                if (saved === "true") {
+                    document.body.classList.add("dark");
+                    document.getElementById("darkToggle").checked = true;
+                    document.querySelector(".icon").textContent = "☀️";
+                }
+            };
+        </script>
+
+    </body>
+</html>
