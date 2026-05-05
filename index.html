@@ -256,14 +256,20 @@
         🏠 HEADER COMPONENT
         ========================= -->
     <div class="card">
-        📊 Finance Pro
-        <div style="display: flex; justify-content: flex-end; width: 100%;">
-            <label class="switch" : justify-content: flex-end; /* Allinea a destra */>
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+    
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span>📊</span> 
+                <span style="font-weight: 500;">Finance Pro</span>
+            </div>
+        
+            <label class="switch" style="margin: 0;">
                 <input type="checkbox" id="darkToggle" onchange="toggleDark()">
                 <span class="slider">
                     <span class="icon">🌙</span>
                 </span>
             </label>
+        
         </div>
     </div>
 
