@@ -14,8 +14,8 @@
 
     <style>
         /* =========================
-            🎨 THEME
-            ========================= */
+        🎨 THEME
+        ========================= */
         body {
             margin: 0;
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
@@ -29,8 +29,8 @@
         }
 
         /* =========================
-            💎 UI BASE
-            ========================= */
+                💎 UI BASE
+                ========================= */
         .card {
             background: rgba(255, 255, 255, 0.8);
             backdrop-filter: blur(20px);
@@ -38,8 +38,8 @@
             padding: 16px;
             border-radius: 20px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-            /* In caso da eliminare 
-            width: auto;*/
+            /* In caso da eliminare */
+            width: auto;
         }
 
         body.dark .card {
@@ -88,8 +88,8 @@
         }
 
         /* =========================
-            📲 NAVIGATION (FAKE REACT)
-            ========================= */
+                📲 NAVIGATION (FAKE REACT)
+                ========================= */
         .tab {
             display: none;
             animation: fade .2s ease;
@@ -170,6 +170,30 @@
             margin-left: 3px;
         }
 
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: white;
+            border-radius: 16px;
+            margin-bottom: 10px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        body.dark .history-item {
+            background: #1c1c1e;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Classe che attiva l'animazione di uscita */
+        .history-item.swiped {
+            transform: translateX(-120%);
+            opacity: 0;
+        }
+
         input:checked+.slider {
             background: #34c759;
         }
@@ -179,24 +203,72 @@
         }
 
         /* =========================
-    📊 GRID LAYOUT (STATS + AI)
-========================= */
+            📊 GRID LAYOUT (STATS + AI)
+            ========================= */
 
-#stats.active,
-#ai.active {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    justify-content: center;
-    gap: 20px;
-    padding: 12px;
-    width: 100%; /* Assicura che il contenitore usi tutto lo spazio */
-}
+        #stats.active,
+        #ai.active {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            justify-content: center;
+            gap: 20px;
+            padding: 12px;
+        }
 
-/* opzionale: togli margine interno delle card per allineamento perfetto */
-#stats .card,
-#ai .card {
-    margin: 0;
-}
+        /* opzionale: togli margine interno delle card per allineamento perfetto */
+        #stats .card,
+        #ai .card {
+            margin: 0;
+        }
+
+        select option[disabled] {
+            color: #999;
+        }
+
+        /* Il contenitore che ha lo sfondo rosso "sotto" */
+        .history-container {
+            position: relative;
+            background: transparent;
+            background: #ff3b30;
+            /* Rosso eliminazione */
+            border-radius: 16px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            transition: background 0.2s;
+        }
+
+        /* La parte bianca che contiene i dati e che effettivamente scivola */
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: white;
+            border-radius: 16px;
+            transition: transform 0.2s ease-out;
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        body.dark .history-item {
+            background: #1c1c1e;
+        }
+
+        /* Scritta "Elimina" che sta sotto */
+        .delete-label {
+            position: absolute;
+            right: 20px;
+            color: white;
+            font-weight: 600;
+            z-index: 1;
+            opacity: 0;
+            /* Nascosta inizialmente */
+            transition: opacity 0.2s;
+        }
     </style>
 
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -205,8 +277,8 @@
 
 <body>
     <!-- =========================
-        🧠 APP STATE (FAKE REACT STORE)
-        ========================= -->
+                🧠 APP STATE (FAKE REACT STORE)
+                ========================= -->
     <script>
         let AppState = {
             data: JSON.parse(localStorage.getItem("finance")) || [],
@@ -254,29 +326,44 @@
     </script>
 
     <!-- =========================
-        🏠 HEADER COMPONENT
-        ========================= -->
+                🏠 HEADER COMPONENT
+                ========================= -->
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-    
+
             <div style="display: flex; align-items: center; gap: 8px;">
-                <span>📊</span> 
+                <span>📊</span>
                 <span style="font-weight: 500;">Finance Pro</span>
             </div>
-        
+
+            <select id="globalMonth" onchange="syncMonth(this.value)" style="margin:0; padding: 5px;">
+                <option>Gennaio</option>
+                <option>Febbraio</option>
+                <option>Marzo</option>
+                <option>Aprile</option>
+                <option>Maggio</option>
+                <option>Giugno</option>
+                <option>Luglio</option>
+                <option>Agosto</option>
+                <option>Settembre</option>
+                <option>Ottobre</option>
+                <option>Novembre</option>
+                <option>Dicembre</option>
+            </select>
+
             <label class="switch" style="margin: 0;">
                 <input type="checkbox" id="darkToggle" onchange="toggleDark()">
                 <span class="slider">
                     <span class="icon">🌙</span>
                 </span>
             </label>
-        
+
         </div>
     </div>
 
     <!-- =========================
-        🏠 HOME COMPONENT
-        ========================= -->
+                🏠 HOME COMPONENT
+                ========================= -->
     <div id="home" class="tab active">
         <div class="hero">
             💰 FINANZE
@@ -290,8 +377,8 @@
     </div>
 
     <!-- =========================
-        ➕ ADD COMPONENT
-        ========================= -->
+                ➕ ADD COMPONENT
+                ========================= -->
     <div id="add" class="tab">
 
         <div class="card">
@@ -300,16 +387,9 @@
             <input id="amount" class="input" type="number" placeholder="Importo">
 
             <p>
-                <select id="category">
-                    <option>Bar</option>
-                    <option>Ristoranti</option>
-                    <option>Divertimento</option>
-                    <option>Trasporti</option>
-                    <option>Casa</option>
-                    <option>Altro</option>
-                </select>
+                <input id="day" type="number" class="input" placeholder="Giorno" min="1" max="31" style="width: 70px;">
 
-                <select id="month">
+                <select id="month" onchange="syncMonth(this.value)">
                     <option>Gennaio</option>
                     <option>Febbraio</option>
                     <option>Marzo</option>
@@ -326,7 +406,18 @@
             </p>
 
             <p>
-                <select id="method">
+                <select id="category" onchange="render()">
+                    <option value="" disabled selected>Scegli Categoria...</option>
+                    <option>Bar</option>
+                    <option>Ristoranti</option>
+                    <option>Divertimento</option>
+                    <option>Trasporti</option>
+                    <option>Casa</option>
+                    <option>Altro</option>
+                </select>
+
+                <select id="method" onchange="render()">
+                    <option value="" disabled selected>Scegli Metodo...</option>
                     <option>Banca</option>
                     <option>Contanti</option>
                     <option>Revolut</option>
@@ -347,8 +438,8 @@
     </div>
 
     <!-- =========================
-        📊 STATS COMPONENT
-        ========================= -->
+                📊 STATS COMPONENT
+                ========================= -->
     <div id="stats" class="tab">
 
         <div class="card">
@@ -369,8 +460,8 @@
     </div>
 
     <!-- =========================
-        🎯 GOALS COMPONENT
-        ========================= -->
+                🎯 GOALS COMPONENT
+                ========================= -->
     <div id="goals" class="tab">
 
         <div class="card">
@@ -381,8 +472,8 @@
     </div>
 
     <!-- =========================
-        🧠 AI COMPONENT
-        ========================= -->
+                🧠 AI COMPONENT
+                ========================= -->
     <div id="ai" class="tab">
 
         <div class="card">
@@ -390,15 +481,15 @@
             <div id="aiBox"></div>
         </div>
         <div class="card">
-            <h3>🧠 Previsione</h3>
+            <h3>📊 Previsione fine mese</h3>
             <div id="forecastBox"></div>
         </div>
 
     </div>
 
     <!-- =========================
-        💼 CEO COMPONENT
-        ========================= -->
+                💼 CEO COMPONENT
+                ========================= -->
     <div id="ceo" class="tab">
 
         <div class="card">
@@ -409,8 +500,8 @@
     </div>
 
     <!-- =========================
-        📲 TAB BAR COMPONENT
-        ========================= -->
+                📲 TAB BAR COMPONENT
+                ========================= -->
     <div class="tabbar">
         <button onclick="show('home')">🏠</button>
         <button onclick="show('add')"> ➕</button>
@@ -421,8 +512,8 @@
     </div>
 
     <!-- =========================
-         ⚙️ LOGIC (FAKE REACT HOOKS)
-        ========================= -->
+                ⚙️ LOGIC (FAKE REACT HOOKS)
+                ========================= -->
     <script>
 
         let lastDeleted = null;
@@ -447,9 +538,27 @@
             let a = parseFloat(document.getElementById("amount").value);
             let c = document.getElementById("category").value;
             let m = document.getElementById("month").value;
+            let meth = document.getElementById("method").value;
+            let day = document.getElementById("day").value || new Date().getDate();
 
+            // CONTROLLO VALIDITÀ
             if (d === "" || isNaN(a)) {
                 alert("Inserisci descrizione e importo validi");
+                return;
+            }
+
+            if (c === "") {
+                alert("Inserisci categoria");
+                return;
+            }
+
+            if (meth === "") {
+                alert("Inserisci metodo");
+                return;
+            }
+
+            if (d === "" || isNaN(a) || c === "" || meth === "") {
+                alert("Per favore, compila tutti i campi");
                 return;
             }
 
@@ -458,7 +567,8 @@
                 amount: isIncome ? a : -a,
                 category: c,
                 month: m,
-                method: method
+                method: meth,
+                day: parseInt(day)
             });
 
             save();
@@ -466,6 +576,11 @@
             // reset input
             document.getElementById("desc").value = "";
             document.getElementById("amount").value = "";
+            document.getElementById("day").value = new Date().getDate(); // Torna a oggi
+
+            // RESET SELETTORI (Tornano sulla scritta "Scegli...")
+            document.getElementById("category").selectedIndex = 0;
+            document.getElementById("method").selectedIndex = 0;
 
             // feedback visivo (toast semplice)
             showToast("✅ Transazione aggiunta");
@@ -509,6 +624,7 @@
             renderHistory(month);
             renderMethodChart(month)
             renderForecast();
+            renderYearChart();
         }
 
         /* =========================
@@ -562,6 +678,73 @@
                 }
             });
 
+        }
+
+        function renderYearChart() {
+            const months = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+
+            let monthlyData = months.map(m => {
+                let res = { inc: 0, out: 0 };
+                AppState.data.forEach(i => {
+                    if (i.month === m) {
+                        i.amount >= 0 ? res.inc += i.amount : res.out += Math.abs(i.amount);
+                    }
+                });
+                return {
+                    inc: res.inc,
+                    out: res.out,
+                    profit: res.inc - res.out // Calcolo utile/perdita
+                };
+            });
+
+            if (AppState.yearChart) AppState.yearChart.destroy();
+
+            AppState.yearChart = new Chart(document.getElementById("yearChart"), {
+                type: 'bar', // Tipo base
+                data: {
+                    labels: months.map(m => m.substring(0, 3)),
+                    datasets: [
+                        {
+                            // LINEA DELL'UTILE
+                            label: "Utile/Perdita",
+                            data: monthlyData.map(d => d.profit),
+                            type: 'line', // Sovrascrive il tipo bar per questo dataset
+                            borderColor: "#0071e3",
+                            backgroundColor: "transparent",
+                            borderWidth: 3,
+                            tension: 0.3, // Rende la linea curva e morbida
+                            fill: false,
+                            order: 1 // La linea sta "sopra" le barre
+                        },
+                        {
+                            label: "Entrate",
+                            data: monthlyData.map(d => d.inc),
+                            backgroundColor: "rgba(52, 199, 89, 0.6)", // Leggermente trasparente
+                            borderRadius: 5,
+                            order: 2
+                        },
+                        {
+                            label: "Uscite",
+                            data: monthlyData.map(d => d.out),
+                            backgroundColor: "rgba(255, 59, 48, 0.6)",
+                            borderRadius: 5,
+                            order: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: "rgba(150,150,150,0.1)" }
+                        }
+                    }
+                }
+            });
         }
 
         /* =========================
@@ -644,17 +827,17 @@
             }
 
             document.getElementById("aiBox").innerHTML = `
-                💰 Entrate: ${income}€<br>
-                💸 Uscite: ${expense}€<br>
-                ${risk}<br><br>
+                        💰 Entrate: ${income}€<br>
+                        💸 Uscite: ${expense}€<br>
+                        ${risk}<br><br>
 
-                💡 Categoria più costosa: ${top ? top[0] : "-"}<br>
-                📊 Tasso risparmio: ${(savingsRate * 100).toFixed(0)}%<br><br>
+                        💡 Categoria più costosa: ${top ? top[0] : "-"}<br>
+                        📊 Tasso risparmio: ${(savingsRate * 100).toFixed(0)}%<br><br>
 
-                ${warnings.length > 0
-                ? warnings.join("<br>")
-                : "🟢 Nessuna spesa fuori controllo"}
-            `;
+                        ${warnings.length > 0
+                    ? warnings.join("<br>")
+                    : "🟢 Nessuna spesa fuori controllo"}
+                    `;
         }
 
         function predictMonth() {
@@ -706,12 +889,11 @@
                         : "🟢 Sei tranquillo";
 
             document.getElementById("forecastBox").innerHTML = `
-                < h4 >📊 Previsione fine mese</h4 >
-            💸 Spesa prevista: ${p.forecastSpend.toFixed(0)}€<br>
-                💰 Guadagni: ${p.earned.toFixed(0)}€<br>
-                    📉 Saldo previsto: <b>${p.balanceForecast.toFixed(0)}€</b><br><br>
+                        💸 Spesa prevista: ${p.forecastSpend.toFixed(0)}€<br>
+                        💰 Guadagni: ${p.earned.toFixed(0)}€<br>
+                        📉 Saldo previsto: <b>${p.balanceForecast.toFixed(0)}€</b><br><br>
                         ${status}
-                        `;
+                    `;
         }
 
         /* =========================
@@ -739,45 +921,83 @@
 
             document.getElementById("ceoBox").innerHTML = `
                         💼 Totale: ${total}€<br>
-                            📊 Mese: ${inc - out}€<br>
-                                ⚡ Stato: ${status}
-                                `;
+                        📊 Mese: ${inc - out}€<br>
+                        ⚡ Stato: ${status}
+                    `;
         }
 
         function renderHistory(month) {
-
             let box = document.getElementById("history");
             if (!box) return;
-
             box.innerHTML = "";
 
             let filtered = AppState.data
                 .map((item, index) => ({ ...item, index }))
                 .filter(i => i.month === month)
-                .reverse();
+                .sort((a, b) => (b.day || 0) - (a.day || 0));
 
             filtered.forEach(item => {
+                let container = document.createElement("div");
+                container.className = "history-container";
 
-                let div = document.createElement("div");
-                div.style.display = "flex";
-                div.style.justifyContent = "space-between";
-                div.style.marginBottom = "8px";
+                container.innerHTML = `
+                            <div class="delete-label">Elimina 🗑️</div>
+                            <div class="history-item" id="item-${item.index}">
+                                <div style="flex: 1;">
+                                    <b style="font-size: 1.05em;">${item.day || ''} ${item.month}</b><br>
+                                    <span style="color: #8e8e93; font-size: 0.9em;">${item.desc} • ${item.category}</span>
+                                </div>
+                                <div style="text-align: right;">
+                                    <b style="color: ${item.amount > 0 ? '#34c759' : '#ff3b30'}; font-size: 1.05em;">
+                                        ${item.amount > 0 ? "+" : ""}${item.amount}€
+                                    </b>
+                                </div>
+                            </div>
+                        `;
 
-                div.innerHTML = `
-                                <span>
-                                    ${item.desc} (${item.category})<br>
-                                        <small>${item.amount > 0 ? "+" : ""}${item.amount}€</small>
-                                </span>
+                let el = container.querySelector('.history-item');
+                let label = container.querySelector('.delete-label');
+                let startX = 0;
+                let currentX = 0;
 
-                                <button onclick="deleteItem(${item.index})"
-                                    style="background:#ff3b30;padding:6px 10px;">
-                                    ❌
-                                </button>
-                                `;
+                el.addEventListener('touchstart', e => {
+                    startX = e.touches[0].clientX;
+                    el.style.transition = 'none';
+                }, { passive: true });
 
-                box.appendChild(div);
+                el.addEventListener('touchmove', e => {
+                    let diff = e.touches[0].clientX - startX;
+                    if (diff < 0) {
+                        currentX = diff;
+                        el.style.transform = `translateX(${currentX}px)`;
+
+                        // ATTIVAZIONE DINAMICA DEL ROSSO
+                        if (currentX < -10) {
+                            container.style.background = '#ff3b30';
+                            label.style.opacity = '1';
+                        }
+                    }
+                }, { passive: true });
+
+                el.addEventListener('touchend', () => {
+                    el.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+
+                    if (currentX < -100) {
+                        el.style.transform = 'translateX(-100%)';
+                        setTimeout(() => deleteItem(item.index), 200);
+                    } else {
+                        el.style.transform = 'translateX(0)';
+                        // RESET DINAMICO SE SI ANNULLA LO SWIPE
+                        setTimeout(() => {
+                            container.style.background = 'transparent';
+                            label.style.opacity = '0';
+                        }, 200);
+                    }
+                    currentX = 0;
+                }, { passive: true });
+
+                box.appendChild(container);
             });
-
         }
 
         function deleteItem(index) {
@@ -789,32 +1009,26 @@
 
             save();
             render();
-
             showUndo();
         }
 
         function showUndo() {
-
             let undo = document.createElement("div");
 
             undo.innerHTML = `
-                                <div style="
-                    position:fixed;
-                    bottom:80px;
-                    left:50%;
-                    transform:translateX(-50%);
-                    background:#1c1c1e;
-                    color:white;
-                    padding:12px 18px;
-                    border-radius:14px;">
-
-                                    Eliminato
-                                    <button onclick="undoDelete()"
-                                        style="margin-left:10px;background:#34c759;">
-                                        Annulla
-                                    </button>
-                                </div>
-                                `;
+                        <div style="
+                            position:fixed;
+                            bottom:80px;
+                            left:50%;
+                            transform:translateX(-50%);
+                            background:#1c1c1e;
+                            color:white;
+                            padding:12px 18px;
+                            border-radius:14px;">Eliminato
+                            <button onclick="undoDelete()" style="margin-left:10px;background:#34c759;">
+                                Annulla
+                            </button>
+                        </div>`;
 
             document.body.appendChild(undo);
 
@@ -822,30 +1036,27 @@
         }
 
         function showToast(message) {
-
             let toast = document.createElement("div");
 
             toast.innerHTML = `
-                                <div style="
-                position:fixed;
-                bottom:140px;
-                left:50%;
-                transform:translateX(-50%);
-                background:#0071e3;
-                color:white;
-                padding:12px 18px;
-                border-radius:14px;
-                box-shadow:0 10px 20px rgba(0,0,0,0.2);">
-                                    ${message}
-                                </div>`;
+                        <div style="
+                            position:fixed;
+                            bottom:140px;
+                            left:50%;
+                            transform:translateX(-50%);
+                            background:#0071e3;
+                            color:white;
+                            padding:12px 18px;
+                            border-radius:14px;
+                            box-shadow:0 10px 20px rgba(0,0,0,0.2);">
+                            ${message}
+                        </div>`;
 
             document.body.appendChild(toast);
-
             setTimeout(() => toast.remove(), 1500);
         }
 
         function undoDelete() {
-
             if (lastDeleted !== null) {
 
                 AppState.data.splice(lastIndex, 0, lastDeleted);
@@ -855,12 +1066,10 @@
 
                 lastDeleted = null;
             }
-
         }
 
         /* INIT */
         render();
-
     </script>
 
     <script>
@@ -883,8 +1092,31 @@
                 document.querySelector(".icon").textContent = "☀️";
             }
         };
-    </script>
 
+        function syncMonth(val) {
+            // Aggiorna il selettore nel tab ADD (se esiste)
+            const addMonthSelect = document.getElementById("month");
+            if (addMonthSelect) addMonthSelect.value = val;
+
+            // Aggiorna il selettore Globale (se l'utente ha usato quello in ADD)
+            const globalMonthSelect = document.getElementById("globalMonth");
+            if (globalMonthSelect) globalMonthSelect.value = val;
+
+            // Lancia il ricalcolo totale
+            render();
+        }
+
+        /* INIT AGGIORNATO */
+        const currentMonthName = new Intl.DateTimeFormat('it-IT', { month: 'long' }).format(new Date());
+        const formattedMonth = currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1);
+
+        // Imposta il giorno e mese corrente nei selettori all'avvio
+        if (document.getElementById("globalMonth")) document.getElementById("globalMonth").value = formattedMonth;
+        if (document.getElementById("month")) document.getElementById("month").value = formattedMonth;
+        document.getElementById("day").value = new Date().getDate();
+
+        render();
+    </script>
 </body>
 
 </html>
