@@ -269,6 +269,45 @@
             /* Nascosta inizialmente */
             transition: opacity 0.2s;
         }
+
+        /* --- SOLO DESKTOP (MOUSE) --- */
+        @media (min-width: 1024px) {
+            .history-container {
+                background: transparent !important;
+                /* Niente rosso sotto su PC */
+            }
+
+            .delete-label {
+                display: none;
+            }
+
+            /* Nascondiamo la label dello swipe */
+
+            .pc-delete-btn {
+                display: none;
+                /* Nascosto di default */
+                background: #ff3b30;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 8px;
+                cursor: pointer;
+                margin-left: 10px;
+                font-size: 12px;
+            }
+
+            /* Mostra il tastino rosso solo quando passi il mouse sulla riga */
+            .history-item:hover .pc-delete-btn {
+                display: inline-block;
+            }
+        }
+
+        /* --- SOLO MOBILE (TOUCH) --- */
+        @media (max-width: 1023px) {
+            .pc-delete-btn {
+                display: none !important;
+            }
+        }
     </style>
 
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -941,25 +980,27 @@
                 container.className = "history-container";
 
                 container.innerHTML = `
-                            <div class="delete-label">Elimina 🗑️</div>
-                            <div class="history-item" id="item-${item.index}">
-                                <div style="flex: 1;">
-                                    <b style="font-size: 1.05em;">${item.day || ''} ${item.month}</b><br>
-                                    <span style="color: #8e8e93; font-size: 0.9em;">${item.desc} • ${item.category}</span>
-                                </div>
-                                <div style="text-align: right;">
-                                    <b style="color: ${item.amount > 0 ? '#34c759' : '#ff3b30'}; font-size: 1.05em;">
-                                        ${item.amount > 0 ? "+" : ""}${item.amount}€
-                                    </b>
-                                </div>
-                            </div>
-                        `;
+            <div class="delete-label">Elimina 🗑️</div>
+            <div class="history-item" id="item-${item.index}">
+                <div style="flex: 1;">
+                    <b style="font-size: 1.05em;">${item.day || ''} ${item.month}</b><br>
+                    <span style="color: #8e8e93; font-size: 0.9em;">${item.desc} • ${item.category}</span>
+                </div>
+                <div style="text-align: right; display: flex; align-items: center; gap: 10px;">
+                    <b style="color: ${item.amount > 0 ? '#34c759' : '#ff3b30'}; font-size: 1.05em;">
+                        ${item.amount > 0 ? "+" : ""}${item.amount}€
+                    </b>
+                    <button class="pc-delete-btn" onclick="deleteItem(${item.index})">Elimina</button>
+                </div>
+            </div>
+        `;
 
                 let el = container.querySelector('.history-item');
                 let label = container.querySelector('.delete-label');
                 let startX = 0;
                 let currentX = 0;
 
+                // --- GESTIONE TOUCH (Mobile) ---
                 el.addEventListener('touchstart', e => {
                     startX = e.touches[0].clientX;
                     el.style.transition = 'none';
@@ -970,8 +1011,6 @@
                     if (diff < 0) {
                         currentX = diff;
                         el.style.transform = `translateX(${currentX}px)`;
-
-                        // ATTIVAZIONE DINAMICA DEL ROSSO
                         if (currentX < -10) {
                             container.style.background = '#ff3b30';
                             label.style.opacity = '1';
@@ -981,13 +1020,11 @@
 
                 el.addEventListener('touchend', () => {
                     el.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-
                     if (currentX < -100) {
                         el.style.transform = 'translateX(-100%)';
                         setTimeout(() => deleteItem(item.index), 200);
                     } else {
                         el.style.transform = 'translateX(0)';
-                        // RESET DINAMICO SE SI ANNULLA LO SWIPE
                         setTimeout(() => {
                             container.style.background = 'transparent';
                             label.style.opacity = '0';
