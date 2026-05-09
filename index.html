@@ -65,13 +65,28 @@
             color: white;
         }
 
+        /* Effetto pressione per TUTTI i bottoni dell'app */
+        button:active {
+            transform: scale(0.95);
+            opacity: 0.8;
+        }
+
+        /* Eccezione per i bottoni della tabbar che devono comunque mantenere il loro stile */
+        .tabbar button:active {
+            transform: scale(0.9);
+        }
+
         .hero {
 
             margin: 12px;
-            padding: 18px;
-            border-radius: 20px;
+            padding: 25px 20px;
+            border-radius: 24px;
             background: linear-gradient(135deg, #0071e3, #34c759);
             color: white;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 10px 20px rgba(0, 113, 227, 0.2);
             text-align: center;
         }
 
@@ -113,23 +128,67 @@
 
         .tabbar {
             position: fixed;
-            bottom: 0;
-            width: 100%;
+            top: 90%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: auto;
+            min-width: 320px;
+            max-width: 90%;
             display: flex;
             justify-content: space-around;
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(20px);
-            padding: 10px 0;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(3px) saturate(180%);
+            -webkit-backdrop-filter: blur(3px) saturate(180%);
+            /* Bordi arrotondati stile Pillola */
+            padding: 6px 15px;
+            border-radius: 30px;
+
+            /* Ombra leggera per dare profondità (floating effect) */
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 0.5px solid rgba(255, 255, 255, 0.2);
+            z-index: 100;
         }
 
         body.dark .tabbar {
-            background: rgba(28, 28, 30, 0.8);
+            background: rgba(28, 28, 30, 0.3);
+            border: 0.5px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
         }
 
+        /* Stile base delle icone nella barra */
         .tabbar button {
             background: none;
             border: none;
-            font-size: 20px;
+            font-size: 18px;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            /* Animazione morbida */
+            opacity: 0.4;
+            /* Più spenta quando non attiva */
+            transform: scale(1);
+            color: inherit;
+        }
+
+        /* Effetto quando l'icona è attiva (classe .active) */
+        .tabbar button.active {
+            opacity: 1;
+            /* Torna visibile al 100% */
+            transform: scale(1.25) translateY(-5px);
+            /* Si ingrandisce del 25% e sale un po' */
+            text-shadow: 0 4px 10px rgba(0, 113, 227, 0.3);
+            /* Leggero bagliore */
+        }
+
+        /*Nel caso aggiungo categorie da modificare*/
+        #home,
+        #add,
+        #stats,
+        #goals,
+        #ai,
+        #ceo {
+            padding-bottom: 100px;
         }
 
         /* spacing */
@@ -174,13 +233,14 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px;
-            background: white;
-            border-radius: 16px;
+            padding: 18px 16px;
+            background: var(--card-bg);
+            border-radius: 18px;
             margin-bottom: 10px;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s;
+            border: 1px solid rgba(0, 0, 0, 0.03);
+            /* Bordo quasi invisibile */
             position: relative;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
         }
 
         body.dark .history-item {
@@ -231,8 +291,8 @@
             background: transparent;
             background: #ff3b30;
             /* Rosso eliminazione */
-            border-radius: 16px;
-            margin-bottom: 10px;
+            border-radius: 18px;
+            margin-bottom: 12px;
             overflow: hidden;
             display: flex;
             align-items: center;
@@ -244,14 +304,15 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px;
+            padding: 18px 16px;
             background: white;
-            border-radius: 16px;
+            border-radius: 18px;
             transition: transform 0.2s ease-out;
             position: relative;
             z-index: 2;
             width: 100%;
             box-sizing: border-box;
+            margin-bottom: 0 !important;
         }
 
         body.dark .history-item {
@@ -308,6 +369,132 @@
                 display: none !important;
             }
         }
+
+        .budget-container {
+            margin-top: 0px;
+            text-align: left;
+        }
+
+        .progress-bg {
+            background: #e5e5ea;
+            height: 8px;
+            border-radius: 4px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            /* Si caricherà via JS */
+            transition: width 0.5s ease-in-out, background-color 0.3s;
+            border-radius: 4px;
+        }
+
+        .budget-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+
+        .search-input {
+            width: 120px;
+            /*max-width: 150px;  Regola la larghezza come preferisci */
+            padding: 8px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.85em;
+            outline: none;
+            /* Colore uguale agli elementi della lista (bianco in light mode, grigio scuro in dark) */
+            background: rgba(120, 120, 128, 0.12);
+            color: inherit;
+            /* Prende il colore del testo circostante */
+            transition: all 0.3s ease;
+            height: 35px;
+            /* Forza un'altezza fissa per un allineamento millimetrico */
+            box-sizing: border-box;
+        }
+
+        /* Adattamento per Dark Mode */
+        body.dark .search-input {
+            background: #1c1c1e;
+            color: white;
+        }
+
+        /* Se vuoi che la barra si allarghi quando ci clicchi sopra */
+        .search-input:focus {
+            width: 160px;
+            /* Si allunga quando scrivi */
+            background: rgba(120, 120, 128, 0.2);
+            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
+        }
+
+        body.dark .search-input:focus {
+            background: #2c2c2e;
+        }
+
+        .progress-bg {
+            background: rgba(255, 255, 255, 0.2);
+            /* Sfondo semi-trasparente sulla card colorata */
+            height: 8px;
+            /* Più sottile */
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            /* Animazione fluida */
+        }
+
+        .tab-bar {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 15px 0 25px 0;
+            /* Più spazio sotto per i telefoni senza tasti fisici */
+            background: rgba(28, 28, 30, 0.8);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .tab-item i,
+        .tab-item span {
+            font-size: 1.4em;
+            /* Icone leggermente più grandi */
+            opacity: 0.6;
+            transition: 0.3s;
+        }
+
+        .tab-item.active i {
+            opacity: 1;
+            transform: translateY(-3px);
+            /* Effetto salto per l'icona attiva */
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            /* Questo allinea i centri dei due elementi */
+            margin-bottom: 15px;
+            gap: 10px;
+        }
+
+        .history-title {
+            margin: 0;
+            white-space: nowrap;
+            font-size: 1.2em;
+            line-height: 1;
+            /* Impedisce al testo di avere spazio vuoto sopra o sotto */
+            display: flex;
+            align-items: center;
+            /* Allinea l'icona del rotolo col testo */
+        }
     </style>
 
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -321,6 +508,7 @@
     <script>
         let AppState = {
             data: JSON.parse(localStorage.getItem("finance")) || [],
+            monthlyBudgets: JSON.parse(localStorage.getItem("monthlyBudgets")) || {},
             chart: null,
             yearChart: null,
             lostChart: null
@@ -410,7 +598,11 @@
         </div>
 
         <div class="card">
-            <h3>📜 Storico mese</h3>
+            <div class="history-header">
+                <h3 class="history-title">📜 Storico</h3>
+                <input type="text" id="searchBar" class="search-input" placeholder="🔍 Cerca..." onkeyup="render()">
+            </div>
+
             <div id="history"></div>
         </div>
     </div>
@@ -542,12 +734,12 @@
                 📲 TAB BAR COMPONENT
                 ========================= -->
     <div class="tabbar">
-        <button onclick="show('home')">🏠</button>
-        <button onclick="show('add')"> ➕</button>
-        <button onclick="show('stats')">📊</button>
-        <button onclick="show('goals')">🎯</button>
-        <button onclick="show('ai')">🧠</button>
-        <button onclick="show('ceo')">💼</button>
+        <button onclick="show('home', event)" class="active">🏠</button>
+        <button onclick="show('add', event)">➕</button>
+        <button onclick="show('stats', event)">📊</button>
+        <button onclick="show('goals', event)">🎯</button>
+        <button onclick="show('ai', event)">🧠</button>
+        <button onclick="show('ceo', event)">💼</button>
     </div>
 
     <!-- =========================
@@ -561,9 +753,32 @@
         /* =========================
         🔄 NAVIGATION
         ========================= */
-        function show(tab) {
-            document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-            document.getElementById(tab).classList.add("active");
+        function show(tabId, ev) {
+            // 1. Cambia la pagina visibile
+            document.querySelectorAll(".tab").forEach(t => {
+                t.classList.remove("active");
+            });
+            const targetTab = document.getElementById(tabId);
+            if (targetTab) targetTab.classList.add("active");
+
+            // 2. Gestione icone barra: Rimuovi 'active' da tutti i bottoni
+            document.querySelectorAll(".tabbar button").forEach(btn => {
+                btn.classList.remove("active");
+            });
+
+            // 3. Aggiungi 'active' al bottone cliccato per deopacizzarlo e ingrandirlo
+            if (ev && ev.currentTarget) {
+                ev.currentTarget.classList.add("active");
+            } else {
+                // Se chiami show() all'avvio senza cliccare, evidenzia il primo tasto
+                const firstBtn = document.querySelector(".tabbar button");
+                if (firstBtn) firstBtn.classList.add("active");
+            }
+
+            // 4. Se hai una funzione render(), chiamala per aggiornare i grafici
+            if (typeof render === "function") {
+                render();
+            }
         }
 
         /* =========================
@@ -638,11 +853,10 @@
             let inc = 0;
             let out = 0;
 
+            /*Calcolo entrate e uscite*/
             AppState.data.forEach(i => {
                 if (i.month !== month) return;
-
                 total += i.amount;
-
                 if (i.amount >= 0) {
                     inc += i.amount;
                 } else {
@@ -652,9 +866,37 @@
                 cat[i.category] = (cat[i.category] || 0) + Math.abs(i.amount);
             });
 
-            document.querySelectorAll("#total").forEach(el => {
-                el.innerText = total + "€";
-            });
+            // --- NUOVA LOGICA: BUDGET AUTOMATICO ---
+            // Il budget è l'80% delle entrate (togliamo il 20% di risparmio subito)
+            // Se non ci sono entrate, mettiamo un minimo di cortesia (es. 100€) per non rompere la barra
+            let budgetAutomatico = inc > 0 ? (inc * 0.8) : 100;
+
+            let percent = (out / budgetAutomatico) * 100;
+            if (percent > 100) percent = 100;
+
+            let barColor = "#34c759";
+            if (percent > 70) barColor = "#ff9500";
+            if (percent >= 90) barColor = "#ff3b30";
+
+            const hero = document.querySelector(".hero");
+            const oldBudget = document.getElementById("budget-stat");
+            if (oldBudget) oldBudget.remove();
+
+            const budgetHTML = `
+    <div id="budget-stat" class="budget-container" style="margin-top: 5px;">
+        <div class="budget-info">
+            <span>Budget Consigliato (80% entrate)</span>
+            <span>${out.toFixed(0)}€ / ${budgetAutomatico.toFixed(0)}€</span>
+        </div>
+        <div class="progress-bg">
+            <div class="progress-fill" style="width: ${percent}%; background-color: ${barColor};"></div>
+        </div>
+        <small style="opacity: 0.7; font-size: 0.75em;">
+            ${inc > 0 ? 'Hai messo al sicuro ' + (inc * 0.2).toFixed(0) + '€ di risparmi' : 'Inserisci un\'entrata per calcolare il budget'}
+        </small>
+    </div>
+`;
+            if (hero) hero.insertAdjacentHTML('beforeend', budgetHTML);
 
             renderCharts(cat);
             renderAI();
@@ -939,17 +1181,64 @@
         🎯 GOALS COMPONENT
         ========================= */
         function renderGoals() {
+            // 1. Recuperiamo il mese selezionato dall'utente
+            let selectedMonth = document.getElementById("month")?.value || "Gennaio";
 
-            let inc = 0, out = 0;
+            let monthInc = 0;
+            let monthOut = 0;
 
+            // 2. Calcoliamo entrate e uscite SOLO per quel mese
             AppState.data.forEach(i => {
-                i.amount >= 0 ? inc += i.amount : out += Math.abs(i.amount);
+                if (i.month === selectedMonth) {
+                    i.amount >= 0 ? monthInc += i.amount : monthOut += Math.abs(i.amount);
+                }
             });
 
-            let save = (inc - out) * 0.2;
+            // 3. Calcolo del risparmio consigliato (20% del netto del mese)
+            let netMonth = monthInc - monthOut;
+            let saveAdvice = netMonth > 0 ? netMonth * 0.2 : 0;
 
-            document.getElementById("goalsBox").innerHTML =
-                `💰 Risparmio consigliato: <b>${save.toFixed(0)}€</b>`;
+            const goalsBox = document.getElementById("goalsBox");
+            if (!goalsBox) return;
+
+            // 4. Costruzione HTML
+            let html = `
+        <div style="margin-bottom: 25px; padding: 15px; background: #0071e3; color: white; border-radius: 15px; text-align: center;">
+            <span style="font-size: 0.9em; opacity: 0.9;">💰 Risparmio consigliato per ${selectedMonth} (20%)</span><br>
+            <b style="font-size: 1.5em;">${saveAdvice.toFixed(0)}€</b>
+        </div>
+        <h3 style="margin-bottom: 15px;">📅 Riepilogo Budget Annuale</h3>
+    `;
+
+            // --- (Il resto del ciclo dei mesi rimane uguale a prima) ---
+            const mesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+                "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+
+            mesi.forEach(m => {
+                let spesoMese = 0;
+                AppState.data.forEach(i => {
+                    if (i.month === m && i.amount < 0) spesoMese += Math.abs(i.amount);
+                });
+
+                let budgetMese = (AppState.monthlyBudgets && AppState.monthlyBudgets[m]) ? AppState.monthlyBudgets[m] : 100;
+                let percent = (spesoMese / budgetMese) * 100;
+                if (percent > 100) percent = 100;
+                let color = percent >= 100 ? "#ff3b30" : "#34c759";
+
+                html += `
+            <div style="margin-bottom: 15px; background: rgba(120,120,128,0.1); padding: 12px; border-radius: 12px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.9em; margin-bottom: 5px;">
+                    <b>${m}</b>
+                    <span>${spesoMese.toFixed(0)} / ${budgetMese}€</span>
+                </div>
+                <div style="background: #e5e5ea; height: 6px; border-radius: 3px; overflow: hidden;">
+                    <div style="width: ${percent}%; background: ${color}; height: 100%; transition: width 0.5s;"></div>
+                </div>
+            </div>
+        `;
+            });
+
+            goalsBox.innerHTML = html;
         }
 
         function renderCEO(inc, out, total) {
@@ -970,9 +1259,20 @@
             if (!box) return;
             box.innerHTML = "";
 
+            // --- Recupera il testo cercato ---
+            let searchTerm = document.getElementById("searchBar")?.value.toLowerCase() || "";
+
+            box.innerHTML = "";
+
             let filtered = AppState.data
                 .map((item, index) => ({ ...item, index }))
-                .filter(i => i.month === month)
+                .filter(i => {
+                    // --- Filtra per mese E per termine di ricerca ---
+                    let matchesMonth = i.month === month;
+                    let matchesSearch = i.desc.toLowerCase().includes(searchTerm) ||
+                        i.category.toLowerCase().includes(searchTerm);
+                    return matchesMonth && matchesSearch;
+                })
                 .sort((a, b) => (b.day || 0) - (a.day || 0));
 
             filtered.forEach(item => {
@@ -1102,6 +1402,23 @@
                 render();
 
                 lastDeleted = null;
+            }
+        }
+
+        //Funzione per cambiare il Budget
+        function changeBudget() {
+            let month = document.getElementById("month")?.value || "Gennaio";
+            // Prendi il budget del mese attuale
+            let currentBudget = AppState.monthlyBudgets[month];
+
+            let newBudget = prompt(`Imposta il budget per ${month}:`, currentBudget);
+
+            if (newBudget !== null && !isNaN(parseFloat(newBudget)) && parseFloat(newBudget) > 0) {
+                // Salva il budget specifico per quel mese
+                AppState.monthlyBudgets[month] = parseFloat(newBudget);
+                localStorage.setItem("monthlyBudgets", JSON.stringify(AppState.monthlyBudgets));
+                render();
+                showToast(`✅ Budget di ${month} aggiornato!`);
             }
         }
 
