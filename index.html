@@ -2293,32 +2293,115 @@ function renderGoals(month, inc, out) {
   let netMonth = inc - out;
   let saveAdvice = netMonth > 0 ? netMonth * 0.2 : 0;
 
-  let savEl = document.getElementById('goalsSavings');
-  if (savEl) {
-    savEl.innerHTML = `
-      <div style="text-align:center; padding:16px 0;">
-        <div style="font-size:.8rem;color:var(--text2);margin-bottom:4px;">Risparmio consigliato per ${month} (20%)</div>
-        <div style="font-size:2rem;font-weight:800;color:var(--blue)">${saveAdvice.toFixed(0)}€</div>
-      </div>`;
+  // Raccoglie spese reali (no Risparmio) per ogni mese
+  let spesaPerMese = {};
+  MONTHS.forEach(m => { spesaPerMese[m] = 0; });
+  AppState.data.forEach(i => {
+    if (i.amount < 0 && i.category !== 'Risparmio')
+      spesaPerMese[i.month] = (spesaPerMese[i.month] || 0) + Math.abs(i.amount);
+  });
+
+  // Raccoglie entrate per ogni mese
+  let entratePerMese = {};
+  MONTHS.forEach(m => { entratePerMese[m] = 0; });
+  AppState.data.forEach(i => {
+    if (i.amount > 0) entratePerMese[i.month] += i.amount;
+  });
+
+  // Mesi con dati reali
+  let mesiConDati = MONTHS.filter(m => spesaPerMese[m] > 0 || entratePerMese[m] > 0);
+
+  // Media ponderata delle spese storiche (mesi piu recenti pesano di piu), +10% buffer
+  function calcolaBudgetAuto(meseTarget) {
+    let storici = mesiConDati.filter(m => m !== meseTarget && spesaPerMese[m] > 0);
+    if (storici.length === 0) {
+      return spesaPerMese[meseTarget] > 0 ? spesaPerMese[meseTarget] * 1.1 : null;
+    }
+    let totalW = 0, somma = 0;
+    storici.forEach(m => {
+      let idx = MONTHS.indexOf(m) + 1;
+      somma += spesaPerMese[m] * idx;
+      totalW += idx;
+    });
+    return (somma / totalW) * 1.1;
   }
 
+  // ── Risparmio consigliato ──
+  let savEl = document.getElementById('goalsSavings');
+  if (savEl) {
+    let budgetMeseCorrente = calcolaBudgetAuto(month);
+    savEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px;">
+        <div style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.15);border-radius:14px;padding:14px;text-align:center;">
+          <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:5px;">Risparmio consigliato</div>
+          <div style="font-size:1.5rem;font-weight:900;color:var(--blue)">${saveAdvice.toFixed(0)}€</div>
+          <div style="font-size:.7rem;color:var(--text2);margin-top:3px;">20% del netto di ${month}</div>
+        </div>
+        <div style="background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.15);border-radius:14px;padding:14px;text-align:center;">
+          <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:5px;">Budget auto ${month}</div>
+          <div style="font-size:1.5rem;font-weight:900;color:var(--green)">${budgetMeseCorrente ? budgetMeseCorrente.toFixed(0)+'€' : '—'}</div>
+          <div style="font-size:.7rem;color:var(--text2);margin-top:3px;">media storica +10%</div>
+        </div>
+      </div>
+      ${mesiConDati.length < 2 ? '<div style="font-size:.75rem;color:var(--text2);text-align:center;padding:8px 0;opacity:.7;">💡 Aggiungi dati su più mesi per budget automatici precisi</div>' : ''}`;
+  }
+
+  // ── Barre annuali con budget automatici ──
   let mEl = document.getElementById('goalsMonths');
   if (!mEl) return;
-  mEl.innerHTML = '';
+
+  mEl.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:10px 12px;background:var(--surface2);border-radius:12px;border:1px solid var(--border);">
+      <span style="font-size:.85rem;">⚙️</span>
+      <span style="font-size:.75rem;color:var(--text2);line-height:1.4;">
+        Budget calcolati dalla <b style="color:var(--text)">media ponderata storica +10%</b>.
+        I mesi piu recenti pesano di piu.
+      </span>
+    </div>`;
+
   MONTHS.forEach(m => {
-    let speso = 0;
-    AppState.data.forEach(i => { if (i.month === m && i.amount < 0) speso += Math.abs(i.amount); });
-    let budget = (AppState.monthlyBudgets[m]) || 500;
+    let speso = spesaPerMese[m] || 0;
+    let hasDati = speso > 0 || entratePerMese[m] > 0;
+
+    if (!hasDati) {
+      mEl.innerHTML += `
+        <div class="month-bar" style="opacity:.35;">
+          <div class="month-bar-header">
+            <span style="color:var(--text2)">${m}</span>
+            <span style="color:var(--text2);font-size:.78rem;">Nessun dato</span>
+          </div>
+          <div class="bar-track" style="background:rgba(0,0,0,0.04);">
+            <div class="bar-fill" style="width:0%;"></div>
+          </div>
+        </div>`;
+      return;
+    }
+
+    let budget = calcolaBudgetAuto(m) || speso * 1.1 || 100;
     let pct = Math.min((speso / budget) * 100, 100);
-    let color = pct >= 100 ? 'var(--red)' : pct > 70 ? 'var(--orange)' : 'var(--green)';
+    let over = speso > budget;
+    let color = over ? 'var(--red)' : pct > 75 ? 'var(--orange)' : 'var(--green)';
+    let deltaAmt = Math.abs(speso - budget).toFixed(0);
+    let deltaStr = over
+      ? `<span style="color:var(--red);font-size:.72rem;">+${deltaAmt}€ sforato</span>`
+      : speso > 0
+        ? `<span style="color:var(--green);font-size:.72rem;">${deltaAmt}€ rimasti</span>`
+        : `<span style="color:var(--text2);font-size:.72rem;">budget: ${budget.toFixed(0)}€</span>`;
+    let nStorici = mesiConDati.filter(x => x !== m && spesaPerMese[x] > 0).length;
+    let fonteStr = nStorici > 0
+      ? `<span style="font-size:.65rem;color:var(--text2);opacity:.7;">su ${nStorici} mes${nStorici===1?'e':'i'} di storico</span>`
+      : '';
 
     mEl.innerHTML += `
       <div class="month-bar">
-        <div class="month-bar-header">
-          <span>${m}</span>
-          <span style="color:${color}">${speso.toFixed(0)} / ${budget}€</span>
+        <div class="month-bar-header" style="align-items:flex-start;">
+          <div><span style="font-weight:700">${m}</span> ${fonteStr}</div>
+          <div style="text-align:right;">
+            <div style="color:${color};font-weight:700">${speso.toFixed(0)} / ${budget.toFixed(0)}€</div>
+            ${deltaStr}
+          </div>
         </div>
-        <div class="bar-track" style="background:rgba(0,0,0,0.06);">
+        <div class="bar-track" style="background:rgba(0,0,0,0.06);margin-top:6px;">
           <div class="bar-fill" style="width:${pct}%;background:${color};"></div>
         </div>
       </div>`;
@@ -3084,28 +3167,10 @@ function renderDeviation() {
 
   let { matrix } = buildCatMonthMatrix();
 
-  // ── Method toggle UI ──────────────────
-  let toggleEl = document.getElementById('devMethodToggle');
-  if (toggleEl && !toggleEl.dataset.built) {
-    toggleEl.dataset.built = '1';
-    const methods = [
-      { id:'mean',     label:'Media' },
-      { id:'median',   label:'Mediana' },
-      { id:'weighted', label:'Ponderata ✦' },
-    ];
-    methods.forEach(m => {
-      let btn = document.createElement('button');
-      btn.className = 'dev-method-chip' + (m.id === _devMethod ? ' active' : '');
-      btn.textContent = m.label;
-      btn.onclick = () => {
-        _devMethod = m.id;
-        localStorage.setItem('devMethod', m.id);
-        toggleEl.dataset.built = ''; // force rebuild next time
-        renderDeviation();
-      };
-      toggleEl.appendChild(btn);
-    });
-  }
+  // ── Method toggle UI — only update .active, chips built once at init ──
+  document.querySelectorAll('#devMethodToggle .dev-method-chip').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.method === _devMethod);
+  });
 
   // ── Method description ────────────────
   let methodEl = document.getElementById('devMethodBox');
@@ -3341,6 +3406,24 @@ function renderDeviation() {
   if (localStorage.getItem('darkMode') === 'true') {
     document.body.classList.add('dark');
     document.getElementById('darkBtn').textContent = '☀️';
+  }
+
+  // Build method toggle chips ONCE here — renderDeviation only updates .active class
+  const toggleEl = document.getElementById('devMethodToggle');
+  if (toggleEl) {
+    [{ id:'mean', label:'Media' }, { id:'median', label:'Mediana' }, { id:'weighted', label:'Ponderata ✦' }]
+      .forEach(m => {
+        let btn = document.createElement('button');
+        btn.className = 'dev-method-chip' + (m.id === _devMethod ? ' active' : '');
+        btn.textContent = m.label;
+        btn.dataset.method = m.id;
+        btn.onclick = () => {
+          _devMethod = m.id;
+          localStorage.setItem('devMethod', m.id);
+          renderDeviation();
+        };
+        toggleEl.appendChild(btn);
+      });
   }
 
   renderAll();
