@@ -7,7 +7,7 @@
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
@@ -1283,6 +1283,261 @@ body.dark .li-month-track { background: rgba(255,255,255,.07); }
 .li-month-fill  { height: 100%; border-radius: 6px; transition: width .5s ease; }
 .li-month-val   { width: 46px; text-align: right; font-weight: 700; flex-shrink: 0; }
 
+
+/* ─────────────────────────────────────────
+   DEVIATION & AUTO BUDGET
+───────────────────────────────────────── */
+
+/* Hero header for dev tab */
+.dev-hero {
+  margin: 0 14px 14px;
+  padding: 22px 20px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #1e1b4b 0%, #3730a3 60%, #6366f1 100%);
+  color: white;
+  box-shadow: 0 8px 28px rgba(99,102,241,.3);
+}
+
+.dev-hero-label {
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  opacity: .65;
+  margin-bottom: 14px;
+}
+
+.dev-hero-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+.dev-hero-stat {
+  background: rgba(255,255,255,.12);
+  border-radius: 14px;
+  padding: 12px 10px;
+  text-align: center;
+  backdrop-filter: blur(8px);
+}
+
+.dev-hero-stat-label {
+  font-size: .62rem;
+  opacity: .7;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 4px;
+}
+
+.dev-hero-stat-val {
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: -.02em;
+}
+
+/* Method toggle chips */
+.dev-method-chip {
+  padding: 7px 14px;
+  border-radius: 30px;
+  font-size: .78rem;
+  font-weight: 700;
+  border: 1.5px solid var(--border);
+  background: var(--surface2);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all .2s;
+  font-family: var(--font);
+}
+
+.dev-method-chip.active {
+  background: #6366f1;
+  color: white;
+  border-color: #6366f1;
+  box-shadow: 0 3px 12px rgba(99,102,241,.3);
+}
+
+/* Method description */
+.dev-method-desc {
+  font-size: .82rem;
+  color: var(--text2);
+  line-height: 1.55;
+  padding: 4px 0;
+}
+
+.dev-method-desc b { color: var(--text); }
+
+/* Per-category deviation card */
+.dev-cat-card {
+  margin: 0 14px 12px;
+  background: var(--surface);
+  border-radius: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  transition: background .3s;
+}
+
+.dev-cat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.dev-cat-icon-wrap {
+  width: 38px; height: 38px;
+  border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.dev-cat-name { font-weight: 700; font-size: .95rem; flex: 1; }
+
+.dev-cat-badge {
+  font-size: .72rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+/* Bullet row: budget / spent / σ */
+.dev-cat-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dev-cat-metric {
+  background: var(--surface2);
+  border-radius: 11px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+}
+
+.dev-cat-metric-label {
+  font-size: .6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text2);
+  margin-bottom: 3px;
+}
+
+.dev-cat-metric-val {
+  font-size: .92rem;
+  font-weight: 800;
+}
+
+/* Sigma bar */
+.dev-sigma-track {
+  height: 8px;
+  border-radius: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: visible;
+  margin: 4px 0 8px;
+}
+
+.dev-sigma-fill {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%;
+  border-radius: 10px;
+  transition: width .6s cubic-bezier(.4,0,.2,1);
+}
+
+/* center tick */
+.dev-sigma-center {
+  position: absolute;
+  left: 50%;
+  top: -3px; bottom: -3px;
+  width: 2px;
+  background: var(--text2);
+  opacity: .25;
+  transform: translateX(-50%);
+  border-radius: 2px;
+}
+
+.dev-sigma-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: .65rem;
+  color: var(--text2);
+  font-weight: 600;
+}
+
+/* Z-score tag */
+.dev-z {
+  font-size: .72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Anomaly transaction row */
+.dev-anomaly-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.dev-anomaly-row:last-child { border-bottom: none; }
+
+.dev-anomaly-icon {
+  font-size: 1rem;
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.dev-anomaly-info { flex: 1; min-width: 0; }
+.dev-anomaly-desc { font-size: .85rem; font-weight: 600; }
+.dev-anomaly-meta { font-size: .72rem; color: var(--text2); margin-top: 1px; }
+
+.dev-anomaly-right { text-align: right; flex-shrink: 0; }
+.dev-anomaly-amt   { font-size: .9rem; font-weight: 800; }
+.dev-anomaly-sigma { font-size: .68rem; color: var(--text2); margin-top: 2px; }
+
+/* Consistency heatmap row */
+.dev-consist-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.dev-consist-row:last-child { border-bottom: none; }
+
+.dev-consist-icon { font-size: 1rem; flex-shrink: 0; width: 22px; text-align: center; }
+.dev-consist-name { font-size: .85rem; font-weight: 600; flex: 1; }
+
+.dev-consist-cv   { font-size: .8rem; font-weight: 800; width: 44px; text-align: right; flex-shrink: 0; }
+
+.dev-consist-bar-wrap {
+  flex: 2;
+  display: flex;
+  gap: 3px;
+}
+
+/* Mini boxes per month presence */
+.dev-month-dot {
+  flex: 1;
+  height: 20px;
+  border-radius: 4px;
+  transition: background .3s;
+}
+
 </style>
 </head>
 <body>
@@ -1614,6 +1869,48 @@ let lastDeleted = null, lastIndex = null;
 
   </div>
 
+
+  <!-- ── DEVIAZIONE & BUDGET AUTO ──────── -->
+  <div id="tab-dev" class="tab">
+
+    <div class="dev-hero">
+      <div class="dev-hero-label">Budget Automatici · <span id="devMonthLabel">—</span></div>
+      <div class="dev-hero-row">
+        <div class="dev-hero-stat">
+          <div class="dev-hero-stat-label">Budget totale</div>
+          <div class="dev-hero-stat-val" id="devTotalBudget">—</div>
+        </div>
+        <div class="dev-hero-stat">
+          <div class="dev-hero-stat-label">Speso</div>
+          <div class="dev-hero-stat-val" id="devTotalSpent" style="color:#f87171">—</div>
+        </div>
+        <div class="dev-hero-stat">
+          <div class="dev-hero-stat-label">Deviazione</div>
+          <div class="dev-hero-stat-val" id="devTotalDev">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Metodo di calcolo</div>
+      <div id="devMethodBox"></div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;" id="devMethodToggle"></div>
+    </div>
+
+    <div id="devCatList"></div>
+
+    <div class="card">
+      <div class="card-title">Transazioni anomale del mese</div>
+      <div id="devAnomalies"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Consistenza per categoria</div>
+      <div id="devConsistency"></div>
+    </div>
+
+  </div>
+
 </div><!-- /app -->
 
 <!-- BOTTOM NAV -->
@@ -1625,6 +1922,7 @@ let lastDeleted = null, lastIndex = null;
   <button class="nav-btn"        onclick="showTab('env',this)"    title="Buste">✉️</button>
   <button class="nav-btn"        onclick="showTab('ai',this)"     title="AI Coach">🧠</button>
   <button class="nav-btn"        onclick="showTab('li',this)"     title="Stile di vita">📈</button>
+  <button class="nav-btn"        onclick="showTab('dev',this)"    title="Deviazione">🎯</button>
   <button class="nav-btn"        onclick="showTab('ceo',this)"    title="CEO">💼</button>
 </nav>
 
@@ -1656,6 +1954,40 @@ function monthData(month) {
 
 function totalBalance() {
   return AppState.data.reduce((s, i) => s + Number(i.amount), 0);
+}
+
+
+/* ── SHARED ANALYSIS HELPERS ─────────────── */
+// Active months = months with at least one transaction, in MONTHS order
+function getActiveMonths() {
+  let set = new Set(AppState.data.map(i => i.month));
+  return MONTHS.filter(m => set.has(m));
+}
+
+// Total spending (excl. Risparmio) for a month
+function monthSpend(month) {
+  let s = 0;
+  AppState.data.forEach(i => {
+    if (i.month === month && i.amount < 0 && i.category !== 'Risparmio')
+      s += Math.abs(i.amount);
+  });
+  return s;
+}
+
+// Total income for a month
+function monthIncome(month) {
+  let s = 0;
+  AppState.data.forEach(i => { if (i.month === month && i.amount > 0) s += i.amount; });
+  return s;
+}
+
+// Spending for a specific category in a specific month
+function catSpend(month, cat) {
+  let s = 0;
+  AppState.data.forEach(i => {
+    if (i.month === month && i.amount < 0 && i.category === cat) s += Math.abs(i.amount);
+  });
+  return s;
 }
 
 /* ── NAVIGATION ─────────────────────────── */
@@ -1757,6 +2089,7 @@ function renderAll() {
   renderCEO(inc, out, total);
   renderEnvelopes();
   renderLifestyleInflation();
+  renderDeviation();
 }
 
 /* ── HERO ───────────────────────────────── */
@@ -2664,6 +2997,323 @@ function renderEnvelopes() {
     let unallocFormatted = (unalloc >= 0 ? '+' : '') + unalloc.toFixed(0) + '€';
     tUnalEl.textContent  = monthInc > 0 ? unallocFormatted : '—';
     tUnalEl.style.color  = unalloc < 0 ? 'var(--red)' : unalloc === 0 ? 'var(--green)' : 'var(--blue)';
+  }
+}
+
+
+/* ═══════════════════════════════════════
+   DEVIATION ANALYSIS & AUTO BUDGETS
+════════════════════════════════════════ */
+
+// Persisted method preference
+let _devMethod = localStorage.getItem('devMethod') || 'weighted';
+
+// ── STATS HELPERS ───────────────────────
+function mean(arr) {
+  if (!arr.length) return 0;
+  return arr.reduce((a,b)=>a+b,0) / arr.length;
+}
+
+function median(arr) {
+  if (!arr.length) return 0;
+  let s = [...arr].sort((a,b)=>a-b);
+  let m = Math.floor(s.length/2);
+  return s.length%2 ? s[m] : (s[m-1]+s[m])/2;
+}
+
+function stddev(arr) {
+  if (arr.length < 2) return 0;
+  let m = mean(arr);
+  return Math.sqrt(arr.reduce((s,x)=>s+Math.pow(x-m,2),0)/arr.length);
+}
+
+// CV = coefficient of variation = stddev/mean (lower = more consistent)
+function cv(arr) {
+  let m = mean(arr);
+  return m > 0 ? stddev(arr)/m : 0;
+}
+
+// Weighted mean: more recent months get higher weight
+function weightedMean(arr) {
+  if (!arr.length) return 0;
+  let totalW = 0, sum = 0;
+  arr.forEach((v,i) => {
+    let w = i+1; // weight = position (oldest=1, newest=n)
+    sum += v*w; totalW += w;
+  });
+  return sum/totalW;
+}
+
+// Auto budget for a category using chosen method
+function autoBudget(values, method) {
+  if (!values.length) return 0;
+  if (method === 'median')   return median(values) * 1.10; // +10% buffer
+  if (method === 'mean')     return mean(values)   * 1.10;
+  if (method === 'weighted') return weightedMean(values) * 1.10;
+  return mean(values) * 1.10;
+}
+
+// Get per-category spending for every active month
+function buildCatMonthMatrix() {
+  // Returns { catName: [val_month0, val_month1, …] } ordered by MONTHS
+  let active = getActiveMonths();
+  let matrix = {};
+  ENV_CATEGORIES.forEach(cat => {
+    matrix[cat.name] = active.map(m => catSpend(m, cat.name));
+  });
+  return { matrix, active };
+}
+
+// ── MAIN RENDER ─────────────────────────
+function renderDeviation() {
+  let month  = getMonth();
+  let active = getActiveMonths();
+
+  // Need at least 2 months of history
+  if (active.length < 2) {
+    ['devTotalBudget','devTotalSpent','devTotalDev','devMethodBox','devCatList','devAnomalies','devConsistency'].forEach(id => {
+      let el = document.getElementById(id);
+      if (el) el.innerHTML = '<div style="color:var(--text2);font-size:.85rem;padding:6px 0">Aggiungi dati su almeno 2 mesi.</div>';
+    });
+    return;
+  }
+
+  // History months = all active EXCEPT current (to keep budget unbiased)
+  let histMonths = active.filter(m => m !== month);
+  if (!histMonths.length) histMonths = active; // fallback: use all
+
+  let { matrix } = buildCatMonthMatrix();
+
+  // ── Method toggle UI ──────────────────
+  let toggleEl = document.getElementById('devMethodToggle');
+  if (toggleEl && !toggleEl.dataset.built) {
+    toggleEl.dataset.built = '1';
+    const methods = [
+      { id:'mean',     label:'Media' },
+      { id:'median',   label:'Mediana' },
+      { id:'weighted', label:'Ponderata ✦' },
+    ];
+    methods.forEach(m => {
+      let btn = document.createElement('button');
+      btn.className = 'dev-method-chip' + (m.id === _devMethod ? ' active' : '');
+      btn.textContent = m.label;
+      btn.onclick = () => {
+        _devMethod = m.id;
+        localStorage.setItem('devMethod', m.id);
+        toggleEl.dataset.built = ''; // force rebuild next time
+        renderDeviation();
+      };
+      toggleEl.appendChild(btn);
+    });
+  }
+
+  // ── Method description ────────────────
+  let methodEl = document.getElementById('devMethodBox');
+  const methodDescs = {
+    mean:     'Il budget è calcolato come <b>media semplice</b> dei mesi storici +10% di buffer. Sensibile ai picchi.',
+    median:   'Il budget è calcolato come <b>mediana</b> dei mesi storici +10% di buffer. Resistente agli outlier.',
+    weighted: 'Il budget è calcolato come <b>media ponderata</b> (i mesi più recenti pesano di più) +10% di buffer. Ideale per trend in evoluzione.',
+  };
+  if (methodEl) {
+    methodEl.innerHTML = `<div class="dev-method-desc">${methodDescs[_devMethod]}</div>
+      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">
+        <div style="background:rgba(99,102,241,.1);color:#6366f1;padding:4px 10px;border-radius:8px;font-size:.72rem;font-weight:700;">σ = deviazione standard</div>
+        <div style="background:rgba(99,102,241,.1);color:#6366f1;padding:4px 10px;border-radius:8px;font-size:.72rem;font-weight:700;">Z = (speso − budget) / σ</div>
+      </div>`;
+  }
+
+  // ── Per-category computations ─────────
+  let totalBudget = 0, totalSpent = 0;
+
+  let catResults = ENV_CATEGORIES.map(cat => {
+    let allVals  = matrix[cat.name];                         // all active months
+    let histVals = histMonths.map(m => catSpend(m, cat.name)); // history only
+    let curSpend = catSpend(month, cat.name);
+
+    let budg = autoBudget(histVals.filter(v=>v>0), _devMethod);
+    let sd   = stddev(histVals.filter(v=>v>0));
+    let avg  = mean(histVals.filter(v=>v>0));
+    let z    = sd > 0 ? (curSpend - avg) / sd : null;
+    let dev  = budg > 0 ? ((curSpend - budg) / budg) * 100 : 0;
+
+    // Only include if there's any historical data
+    let hasData = histVals.some(v=>v>0) || curSpend > 0;
+
+    totalBudget += budg;
+    totalSpent  += curSpend;
+
+    return { cat, budg, curSpend, avg, sd, z, dev, allVals, histVals, hasData };
+  }).filter(r => r.hasData);
+
+  // ── Header stats ─────────────────────
+  let totalDev = totalBudget > 0 ? ((totalSpent-totalBudget)/totalBudget*100) : 0;
+  let devColor = totalDev > 15 ? '#f87171' : totalDev > 5 ? '#fb923c' : '#4ade80';
+
+  let ml = document.getElementById('devMonthLabel');
+  if (ml) ml.textContent = month;
+  let tb = document.getElementById('devTotalBudget');
+  if (tb) tb.textContent = totalBudget.toFixed(0)+'€';
+  let ts = document.getElementById('devTotalSpent');
+  if (ts) ts.textContent = totalSpent.toFixed(0)+'€';
+  let td = document.getElementById('devTotalDev');
+  if (td) { td.textContent = (totalDev>=0?'+':'')+totalDev.toFixed(0)+'%'; td.style.color = devColor; }
+
+  // ── Per-category cards ────────────────
+  let catListEl = document.getElementById('devCatList');
+  if (catListEl) {
+    catListEl.innerHTML = '';
+    catResults.sort((a,b) => Math.abs(b.dev)-Math.abs(a.dev)).forEach(r => {
+      let isOver  = r.curSpend > r.budg && r.budg > 0;
+      let badgeColor = isOver ? '#dc2626' : r.dev < -20 ? '#16a34a' : '#6366f1';
+      let badgeBg    = isOver ? 'rgba(220,38,38,.1)' : r.dev < -20 ? 'rgba(22,163,74,.1)' : 'rgba(99,102,241,.1)';
+      let devStr = r.budg > 0 ? (r.dev>=0?'+':'')+r.dev.toFixed(0)+'%' : '—';
+
+      // Z-score label
+      let zLabel = '', zColor = '#6366f1', zBg = 'rgba(99,102,241,.1)';
+      if (r.z !== null) {
+        if      (r.z > 2)  { zLabel='⚠️ Outlier';     zColor='#dc2626'; zBg='rgba(220,38,38,.1)'; }
+        else if (r.z > 1)  { zLabel='↑ Alto';          zColor='#ea580c'; zBg='rgba(234,88,12,.1)'; }
+        else if (r.z < -1) { zLabel='↓ Basso';         zColor='#16a34a'; zBg='rgba(22,163,74,.1)'; }
+        else               { zLabel='✓ Normale';       zColor='#6366f1'; zBg='rgba(99,102,241,.1)'; }
+      }
+
+      // Sigma bar: center=budget, fill extends right(over) or left(under)
+      // We map -2σ…+2σ onto the bar. Center=50%.
+      let sigmaRange = r.sd > 0 ? r.sd * 2 : (r.budg * 0.3 || 1);
+      let zClamped   = r.z !== null ? Math.max(-2, Math.min(2, r.z)) : 0;
+      let fillPct    = Math.abs(zClamped) * 25; // 25% per sigma unit (2σ = 50% width)
+      let fillLeft   = zClamped >= 0; // extends right from center
+      let fillColor  = zClamped > 1.5 ? '#dc2626' : zClamped > 0.5 ? '#ea580c' : zClamped < -0.5 ? '#16a34a' : '#6366f1';
+
+      // Budget source
+      let budgStr = r.budg > 0 ? r.budg.toFixed(0)+'€' : '—';
+      let avgStr  = r.avg  > 0 ? r.avg.toFixed(0)+'€'  : '—';
+      let sdStr   = r.sd   > 0 ? '±'+r.sd.toFixed(0)+'€' : '—';
+
+      let card = document.createElement('div');
+      card.className = 'dev-cat-card';
+      card.innerHTML = `
+        <div class="dev-cat-header">
+          <div class="dev-cat-icon-wrap" style="background:${r.cat.color}20;">${r.cat.icon}</div>
+          <div class="dev-cat-name">${r.cat.name}</div>
+          ${r.z !== null ? `<div class="dev-z" style="color:${zColor};background:${zBg};">${zLabel}</div>` : ''}
+          <div class="dev-cat-badge" style="color:${badgeColor};background:${badgeBg};">${devStr}</div>
+        </div>
+
+        <div class="dev-cat-metrics">
+          <div class="dev-cat-metric">
+            <div class="dev-cat-metric-label">Budget auto</div>
+            <div class="dev-cat-metric-val" style="color:#6366f1">${budgStr}</div>
+          </div>
+          <div class="dev-cat-metric">
+            <div class="dev-cat-metric-label">Speso</div>
+            <div class="dev-cat-metric-val" style="color:${isOver?'var(--red)':'var(--text)'}">${r.curSpend.toFixed(0)}€</div>
+          </div>
+          <div class="dev-cat-metric">
+            <div class="dev-cat-metric-label">Media storica</div>
+            <div class="dev-cat-metric-val">${avgStr}</div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--text2);margin-bottom:4px;font-weight:600;">
+          <span>−2σ</span><span>Media</span><span>+2σ</span>
+        </div>
+        <div class="dev-sigma-track" style="height:10px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);position:relative;overflow:hidden;">
+          <div class="dev-sigma-center"></div>
+          <div style="position:absolute;top:0;bottom:0;${fillLeft?'left:50%':'right:calc('+fillPct+'%)'}; width:${fillPct}%;background:${fillColor};border-radius:10px;opacity:.8;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:.7rem;color:var(--text2);font-weight:600;">
+          <span>σ ${sdStr}</span>
+          ${r.z !== null ? `<span>Z-score: <b style="color:${zColor}">${r.z.toFixed(2)}</b></span>` : ''}
+          <span style="color:${isOver?'var(--red)':'var(--green)'};">${r.curSpend>0&&r.budg>0 ? (isOver?'Sforato di '+(r.curSpend-r.budg).toFixed(0)+'€':'Avanzano '+(r.budg-r.curSpend).toFixed(0)+'€') : ''}</span>
+        </div>
+      `;
+      catListEl.appendChild(card);
+    });
+  }
+
+  // ── Anomaly feed ──────────────────────
+  // Transactions in current month where amount > avg+1.5σ for that category
+  let anomEl = document.getElementById('devAnomalies');
+  if (anomEl) {
+    let anomalies = [];
+    AppState.data.forEach((item, idx) => {
+      if (item.month !== month || item.amount >= 0) return;
+      let cat = item.category;
+      if (cat === 'Risparmio') return;
+      let r = catResults.find(x => x.cat.name === cat);
+      if (!r || r.sd === 0) return;
+      let amt = Math.abs(item.amount);
+      let z = r.avg > 0 ? (amt - r.avg) / r.sd : 0;
+      if (z > 1.5) anomalies.push({ ...item, idx, z, avg: r.avg, sd: r.sd });
+    });
+
+    anomalies.sort((a,b)=>b.z-a.z);
+
+    if (!anomalies.length) {
+      anomEl.innerHTML = `<div class="li-alert ok"><div class="li-alert-icon">✅</div><div class="li-alert-body"><div class="li-alert-title">Nessuna anomalia</div><div class="li-alert-desc">Tutte le transazioni del mese rientrano nei range storici normali.</div></div></div>`;
+    } else {
+      anomEl.innerHTML = anomalies.map(a => {
+        let zColor = a.z > 2.5 ? 'var(--red)' : 'var(--orange)';
+        let meta = ENV_CATEGORIES.find(c=>c.name===a.category);
+        return `<div class="dev-anomaly-row">
+          <div class="dev-anomaly-icon" style="background:${meta?.color||'#6b7280'}20;">${meta?.icon||'📦'}</div>
+          <div class="dev-anomaly-info">
+            <div class="dev-anomaly-desc">${a.desc}</div>
+            <div class="dev-anomaly-meta">${a.day||''} ${a.month} · ${a.category} · media storica: ${a.avg.toFixed(0)}€</div>
+          </div>
+          <div class="dev-anomaly-right">
+            <div class="dev-anomaly-amt" style="color:var(--red)">−${Math.abs(a.amount).toFixed(0)}€</div>
+            <div class="dev-anomaly-sigma" style="color:${zColor}">Z = ${a.z.toFixed(1)}σ</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // ── Consistency score (CV) ─────────────
+  let conEl = document.getElementById('devConsistency');
+  if (conEl) {
+    let rows = catResults
+      .map(r => {
+        let vals = r.histVals;
+        let c = cv(vals.filter(v=>v>0));
+        return { ...r, cv: c };
+      })
+      .filter(r => r.histVals.filter(v=>v>0).length >= 2)
+      .sort((a,b)=>a.cv-b.cv);
+
+    if (!rows.length) {
+      conEl.innerHTML = '<div style="color:var(--text2);font-size:.85rem;">Dati insufficienti.</div>';
+      return;
+    }
+
+    conEl.innerHTML = rows.map(r => {
+      let cvPct = (r.cv * 100).toFixed(0);
+      let cvColor = r.cv < 0.2 ? '#16a34a' : r.cv < 0.5 ? '#ea580c' : '#dc2626';
+      let cvLabel = r.cv < 0.2 ? 'Costante' : r.cv < 0.5 ? 'Variabile' : 'Irregolare';
+
+      // Mini monthly dots — one per active month
+      let dotsHtml = active.map(m => {
+        let v = catSpend(m, r.cat.name);
+        let budget = r.budg;
+        let dotColor = v === 0
+          ? 'var(--surface2)'
+          : budget === 0 ? r.cat.color+'99'
+          : v > budget ? '#dc2626' : v > budget*0.75 ? '#ea580c' : '#16a34a';
+        return `<div class="dev-month-dot" style="background:${dotColor};" title="${m}: ${v.toFixed(0)}€"></div>`;
+      }).join('');
+
+      return `<div class="dev-consist-row">
+        <div class="dev-consist-icon">${r.cat.icon}</div>
+        <div class="dev-consist-name">${r.cat.name}</div>
+        <div class="dev-consist-bar-wrap">${dotsHtml}</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;width:70px;">
+          <span style="font-size:.65rem;font-weight:700;color:${cvColor};">${cvLabel}</span>
+          <span class="dev-consist-cv" style="color:${cvColor};">CV ${cvPct}%</span>
+        </div>
+      </div>`;
+    }).join('');
   }
 }
 
