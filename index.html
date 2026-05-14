@@ -7,6 +7,9 @@
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#f0f2f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a0a0f"  media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -49,9 +52,12 @@ body {
   font-family: var(--font);
   background: var(--bg);
   color: var(--text);
-  min-height: 100svh;
+  min-height: 100vh; min-height: 100svh;
   overflow-x: hidden;
   transition: background .3s, color .3s;
+  /* iOS standalone: extend bg under status bar */
+  padding-top: env(safe-area-inset-top, 0px);
+  box-sizing: border-box;
 }
 
 /* ─────────────────────────────────────────
@@ -62,6 +68,8 @@ body {
   margin: 0 auto;
   padding: 0 0 90px 0;
   min-height: 100svh;
+  /* Prevent content hiding under status bar on Android */
+  padding-top: 0;
 }
 
 /* ─────────────────────────────────────────
@@ -93,7 +101,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 20px 14px;
+  padding: 12px clamp(12px,3vw,20px) 12px;
   position: sticky;
   top: 0;
   z-index: 50;
@@ -153,7 +161,7 @@ body {
    HERO BALANCE CARD
 ───────────────────────────────────────── */
 .hero-card {
-  margin: 0 14px 14px;
+  margin: 0 clamp(8px,3vw,14px) 14px;
   padding: 28px 24px;
   border-radius: 24px;
   background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 60%, #0ea5e9 100%);
@@ -269,7 +277,7 @@ body {
 /* Pill-style floating nav bar (5 main + ••• overflow) */
 .bottomnav {
   position: fixed;
-  bottom: 18px;
+  bottom: max(18px, calc(env(safe-area-inset-bottom, 0px) + 10px));
   left: 50%;
   transform: translateX(-50%);
   background: var(--surface);
@@ -354,7 +362,7 @@ body {
 
 .nav-drawer {
   position: fixed;
-  bottom: 82px;
+  bottom: max(82px, calc(env(safe-area-inset-bottom, 0px) + 72px));
   left: 50%;
   transform: translateX(-50%);
   background: var(--surface);
@@ -408,7 +416,7 @@ body {
   color: inherit;
 }
 
-.app { padding-bottom: 90px; }
+.app { padding-bottom: max(90px, calc(env(safe-area-inset-bottom, 0px) + 80px)); }
 
 /* ─────────────────────────────────────────
    SECTION HEADER
@@ -417,9 +425,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 14px 10px;
+  gap: 8px;
+  margin: 0 clamp(8px,3vw,14px) 10px;
   padding-top: 4px;
+  overflow: hidden;
 }
+
+.section-title { white-space: nowrap; }
 
 .section-title {
   font-size: 1.1rem;
@@ -531,7 +543,7 @@ body {
 }
 
 .search-input {
-  width: 130px;
+  width: clamp(100px, 30vw, 140px);
   padding: 8px 12px 8px 32px;
   border-radius: 12px;
   border: 1px solid var(--border);
@@ -540,9 +552,10 @@ body {
   font-size: .85rem;
   outline: none;
   transition: all .25s;
+  min-height: 38px;
 }
 
-.search-input:focus { width: 160px; box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+.search-input:focus { width: clamp(120px, 38vw, 170px); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
 
 /* ─────────────────────────────────────────
    ADD FORM
@@ -713,7 +726,7 @@ body {
 /* Toast & Undo */
 .toast {
   position: fixed;
-  bottom: 90px;
+  bottom: max(90px, calc(env(safe-area-inset-bottom, 0px) + 80px));
   left: 50%;
   transform: translateX(-50%) translateY(0);
   background: var(--surface);
@@ -1178,7 +1191,7 @@ body.dark .env-bar-track { background: rgba(255,255,255,.08); }
 .env-modal {
   background: var(--surface);
   border-radius: 24px 24px 0 0;
-  padding: 28px 24px 40px;
+  padding: 28px 24px calc(40px + env(safe-area-inset-bottom, 0px));
   width: 100%;
   max-width: 520px;
   animation: sheetUp .25s cubic-bezier(.4,0,.2,1);
@@ -1672,7 +1685,7 @@ body:not(.dark) .wallet-card {
 
 .wallet-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
 
@@ -1680,10 +1693,10 @@ body:not(.dark) .wallet-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   background: rgba(255,255,255,0.06);
   border-radius: 14px;
-  padding: 12px 8px;
+  padding: clamp(8px,2.5vw,12px) clamp(4px,1.5vw,8px);
   border: 1px solid rgba(255,255,255,0.07);
   transition: transform .15s;
 }
@@ -1703,16 +1716,16 @@ body:not(.dark) .wallet-item {
 }
 
 .wallet-item-label {
-  font-size: .65rem;
+  font-size: clamp(.55rem, 2.2vw, .65rem);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: .04em;
   color: var(--text2);
   text-align: center;
 }
 
 .wallet-item-bal {
-  font-size: 1.05rem;
+  font-size: clamp(.8rem, 3.5vw, 1.05rem);
   font-weight: 900;
   letter-spacing: -.02em;
   color: var(--text);
@@ -1764,7 +1777,7 @@ body:not(.dark) .wallet-setup-btn {
 .wallet-sheet {
   background: var(--surface);
   border-radius: 24px 24px 0 0;
-  padding: 28px 20px 44px;
+  padding: 28px 20px calc(44px + env(safe-area-inset-bottom, 0px));
   width: 100%;
   max-width: 520px;
   animation: sheetUp .25s cubic-bezier(.4,0,.2,1);
@@ -2098,7 +2111,7 @@ body:not(.dark) .wallet-setup-btn {
 .acc-sheet {
   background: var(--surface);
   border-radius: 24px 24px 0 0;
-  padding: 24px 20px 44px;
+  padding: 24px 20px calc(44px + env(safe-area-inset-bottom, 0px));
   width: 100%;
   max-width: 520px;
   animation: sheetUp .25s cubic-bezier(.4,0,.2,1);
@@ -2284,7 +2297,7 @@ body:not(.dark) .wallet-setup-btn {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 30px 24px;
+  padding: calc(env(safe-area-inset-top, 30px) + 30px) 24px calc(env(safe-area-inset-bottom, 0px) + 20px);
   animation: fadeUp .2s ease;
 }
 
@@ -2455,6 +2468,265 @@ body:not(.dark) .wallet-setup-btn {
 .pin-setting-btn:active { opacity: .75; }
 .pin-setting-btn.set    { background: rgba(37,99,235,.12);  color: var(--blue); }
 .pin-setting-btn.remove { background: rgba(220,38,38,.1);   color: var(--red);  }
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE-FIRST FIXES
+   Tested targets: 320px (SE), 375px (iPhone 13 mini),
+   390px (iPhone 15), 412px (Pixel), 768px (tablet)
+════════════════════════════════════════════════════════ */
+
+/* ── Base fluid type & spacing ─────────────────────── */
+html {
+  font-size: clamp(14px, 4vw, 16px);   /* never smaller than 14px */
+}
+
+/* ── Prevent horizontal overflow everywhere ─────────── */
+*, *::before, *::after {
+  max-width: 100%;
+}
+
+img, canvas, svg { max-width: 100%; height: auto; }
+
+/* ── App container ──────────────────────────────────── */
+.app {
+  width: 100%;
+  max-width: 520px;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* ── Cards: tighter on very small screens ───────────── */
+.card {
+  margin-left: clamp(8px, 3vw, 14px);
+  margin-right: clamp(8px, 3vw, 14px);
+  padding: clamp(14px, 4vw, 20px);
+  border-radius: clamp(14px, 4vw, 18px);
+}
+
+/* ── Topbar: shrink account pill on small screens ───── */
+.topbar {
+  padding: 12px clamp(12px, 3vw, 20px);
+  gap: 8px;
+}
+
+.account-pill {
+  max-width: clamp(90px, 35vw, 140px);
+  padding: 6px 8px 6px 7px;
+  font-size: clamp(.72rem, 3vw, .82rem);
+}
+
+.account-pill-dot { width: 9px; height: 9px; }
+
+.month-pill {
+  padding: 6px clamp(20px, 6vw, 28px) 6px 10px;
+  font-size: clamp(.75rem, 3vw, .85rem);
+  max-width: clamp(80px, 28vw, 130px);
+}
+
+.dark-btn {
+  width: 34px; height: 34px;
+  font-size: .9rem;
+  flex-shrink: 0;
+}
+
+/* ── Hero card ──────────────────────────────────────── */
+.hero-card {
+  margin-left: clamp(8px, 3vw, 14px);
+  margin-right: clamp(8px, 3vw, 14px);
+  padding: clamp(18px, 5vw, 28px) clamp(14px, 4vw, 24px);
+  border-radius: clamp(16px, 5vw, 24px);
+}
+
+.hero-amount {
+  font-size: clamp(1.8rem, 8vw, 2.8rem);
+}
+
+.hero-stats {
+  gap: clamp(8px, 2vw, 12px);
+}
+
+.hero-stat {
+  padding: clamp(8px, 2.5vw, 12px) clamp(10px, 3vw, 14px);
+  border-radius: clamp(10px, 3vw, 14px);
+}
+
+.hero-stat-val { font-size: clamp(.9rem, 4vw, 1.1rem); }
+
+/* ── Section headers ────────────────────────────────── */
+.section-header {
+  margin-left: clamp(8px, 3vw, 14px);
+  margin-right: clamp(8px, 3vw, 14px);
+}
+
+/* ── Transaction history items ──────────────────────── */
+.history-list {
+  margin-left: clamp(8px, 3vw, 14px);
+  margin-right: clamp(8px, 3vw, 14px);
+}
+
+.txn {
+  padding: clamp(10px, 3vw, 14px) clamp(12px, 3vw, 16px);
+  gap: clamp(8px, 2.5vw, 14px);
+}
+
+.txn-icon {
+  width: clamp(34px, 9vw, 42px);
+  height: clamp(34px, 9vw, 42px);
+  border-radius: clamp(9px, 2.5vw, 12px);
+  font-size: clamp(.95rem, 4vw, 1.1rem);
+  flex-shrink: 0;
+}
+
+.txn-desc  { font-size: clamp(.82rem, 3.5vw, .95rem); }
+.txn-meta  { font-size: clamp(.68rem, 2.8vw, .78rem); }
+.txn-amount{ font-size: clamp(.85rem, 3.5vw, 1rem); }
+
+/* ── Form elements — min 44px tap targets ───────────── */
+.form-input,
+select.form-input {
+  min-height: 48px;
+  font-size: clamp(.88rem, 3.5vw, .95rem);
+  padding: clamp(10px, 3vw, 13px) clamp(12px, 3vw, 14px);
+}
+
+/* Stack form-row on very small screens */
+@media (max-width: 360px) {
+  .form-row { grid-template-columns: 1fr; }
+}
+
+.btn {
+  min-height: 50px;
+  font-size: clamp(.9rem, 4vw, 1rem);
+  padding: clamp(12px, 3vw, 15px);
+  border-radius: clamp(12px, 3vw, 14px);
+}
+
+/* ── Wallet card ─────────────────────────────────────── */
+.wallet-card {
+  margin-left: clamp(8px, 3vw, 14px);
+  margin-right: clamp(8px, 3vw, 14px);
+  padding: clamp(12px, 3.5vw, 16px) clamp(14px, 4vw, 18px);
+}
+
+.wallet-grid { gap: clamp(6px, 2vw, 10px); }
+
+.wallet-item {
+  padding: clamp(8px, 2.5vw, 12px) clamp(6px, 2vw, 8px);
+  border-radius: clamp(10px, 3vw, 14px);
+}
+
+.wallet-item-bal { font-size: clamp(.85rem, 4vw, 1.05rem); }
+
+/* ── Bottom sheet (wallet, account, sp) ─────────────── */
+.wallet-sheet,
+.acc-sheet {
+  padding: clamp(18px, 5vw, 28px) clamp(14px, 4vw, 20px) clamp(28px, 8vw, 44px);
+  border-radius: clamp(18px, 5vw, 24px) clamp(18px, 5vw, 24px) 0 0;
+}
+
+.wallet-sheet-input {
+  min-height: 48px;
+  font-size: clamp(.88rem, 3.5vw, .95rem);
+}
+
+.wallet-sheet-save,
+.acc-create-btn {
+  min-height: 50px;
+  font-size: clamp(.88rem, 3.5vw, .95rem);
+}
+
+/* ── Nav drawer ──────────────────────────────────────── */
+.nav-drawer {
+  bottom: clamp(76px, 15vw, 90px);
+  min-width: clamp(200px, 70vw, 260px);
+  max-width: calc(100vw - 28px);
+}
+
+.nav-drawer-item {
+  padding: clamp(8px, 2.5vw, 12px) clamp(6px, 2vw, 8px);
+  border-radius: clamp(12px, 3vw, 16px);
+}
+
+.nav-drawer-icon { font-size: clamp(1.2rem, 5vw, 1.4rem); }
+.nav-drawer-label { font-size: clamp(.58rem, 2.5vw, .65rem); }
+
+/* ── PIN screen ──────────────────────────────────────── */
+.pin-numpad {
+  max-width: clamp(240px, 80vw, 280px);
+  gap: clamp(8px, 2.5vw, 12px);
+}
+
+.pin-key {
+  height: clamp(56px, 14vw, 68px);
+  border-radius: clamp(14px, 4vw, 18px);
+  font-size: clamp(1.2rem, 5vw, 1.4rem);
+}
+
+/* ── Envelope grid ───────────────────────────────────── */
+.env-grid {
+  margin-left: clamp(8px, 3vw, 14px);
+  margin-right: clamp(8px, 3vw, 14px);
+  gap: clamp(8px, 2vw, 10px);
+}
+
+@media (max-width: 340px) {
+  .env-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Dev hero ────────────────────────────────────────── */
+.dev-hero {
+  margin-left: clamp(8px, 3vw, 14px);
+  margin-right: clamp(8px, 3vw, 14px);
+  padding: clamp(16px, 4vw, 22px) clamp(14px, 4vw, 20px);
+  border-radius: clamp(16px, 4vw, 22px);
+}
+
+.dev-hero-stat-val { font-size: clamp(.88rem, 4vw, 1.05rem); }
+
+.dev-hero-row { gap: clamp(8px, 2vw, 10px); }
+
+/* ── SP hero ─────────────────────────────────────────── */
+.sp-hero {
+  margin-left: clamp(8px, 3vw, 14px);
+  margin-right: clamp(8px, 3vw, 14px);
+  padding: clamp(18px, 5vw, 26px) clamp(14px, 4vw, 22px) clamp(14px, 4vw, 22px);
+  border-radius: clamp(16px, 5vw, 24px);
+}
+
+.sp-hero-amount { font-size: clamp(1.8rem, 8vw, 2.6rem); }
+.sp-hero-row    { gap: clamp(8px, 2vw, 10px); }
+
+/* ── Lifestyle ring ──────────────────────────────────── */
+@media (max-width: 380px) {
+  .li-score-wrap { flex-direction: column; align-items: center; text-align: center; }
+  .li-ring { width: 100px; height: 100px; }
+  .li-ring svg { width: 100px; height: 100px; }
+}
+
+/* ── Forecast grid ───────────────────────────────────── */
+@media (max-width: 340px) {
+  .forecast-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Acc nav custom sheet grid ───────────────────────── */
+@media (max-width: 380px) {
+  #navCustomOverlay .wallet-sheet > div[style*="grid"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Ensure modals don't overflow ────────────────────── */
+.wallet-sheet-overlay > * {
+  max-width: min(520px, 100vw);
+  width: 100%;
+}
+
+/* ── Large screens: desktop comfort ─────────────────── */
+@media (min-width: 521px) {
+  .app { padding-left: 0; padding-right: 0; }
+  .bottomnav { bottom: 24px; }
+}
+
 </style>
 </head>
 <body>
