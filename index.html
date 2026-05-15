@@ -2727,6 +2727,57 @@ select.form-input {
   .bottomnav { bottom: 24px; }
 }
 
+
+/* ─────────────────────────────────────────
+   TRANSACTION TYPE TOGGLE
+───────────────────────────────────────── */
+.type-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 5px;
+  background: var(--surface2);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+}
+
+.type-btn {
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  font-size: .92rem;
+  font-weight: 700;
+  font-family: var(--font);
+  cursor: pointer;
+  background: transparent;
+  color: var(--text2);
+  transition: all .18s cubic-bezier(.4,0,.2,1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  letter-spacing: -.01em;
+}
+
+.type-btn.active {
+  color: white;
+  box-shadow: 0 2px 12px rgba(0,0,0,.15);
+  transform: scale(1.02);
+}
+
+#btnExpense.active { background: var(--red); }
+#btnIncome.active  { background: var(--green); }
+
+.type-btn:active { transform: scale(.96); }
+
+/* Category chip colors — new set */
+.cat-income { background: rgba(22,163,74,.13); }
+.cat-invest { background: rgba(37,99,235,.13); }
+.cat-gift   { background: rgba(190,24,93,.13); }
+.cat-care   { background: rgba(8,145,178,.13); }
+.cat-sub    { background: rgba(100,116,139,.13); }
+.cat-apple  { background: rgba(107,114,128,.13); }
+.cat-tech   { background: rgba(99,102,241,.13); }
 </style>
 </head>
 <body>
@@ -2816,17 +2867,43 @@ function curSigned(amount, decimals) {
   return (amount >= 0 ? '+' : '−') + abs;
 }
 
-const CAT_ICONS = {
-  "Bar":"☕","Ristoranti":"🍽️","Divertimento":"🎮","Trasporti":"🚌",
-  "Casa":"🏠","Spotify":"🎵","Risparmio":"💎","Altro":"📦",
-  "Spesa":"🛒","Bollette":"💡"
-};
+// ── CATEGORY SYSTEM ─────────────────────
+// type: 'income' = solo entrate, 'expense' = solo uscite, 'both' = entrambe
+const CATEGORIES = [
+  // ENTRATE
+  { name: 'Stipendio',     icon: '💼', color: '#16a34a', type: 'income',  class: 'cat-income' },
+  { name: 'Lavoro',        icon: '🛠️', color: '#15803d', type: 'income',  class: 'cat-income' },
+  { name: 'Investimenti',  icon: '📈', color: '#2563eb', type: 'both',    class: 'cat-invest' },
+  // USCITE QUOTIDIANE
+  { name: 'Bar',           icon: '☕', color: '#ea580c', type: 'expense', class: 'cat-bar'    },
+  { name: 'Ristoranti',    icon: '🍽️', color: '#dc2626', type: 'expense', class: 'cat-rist'   },
+  { name: 'Divertimento',  icon: '🎮', color: '#7c3aed', type: 'expense', class: 'cat-div'    },
+  { name: 'Regali',        icon: '🎁', color: '#be185d', type: 'expense', class: 'cat-gift'   },
+  { name: 'Cura personale',icon: '💆', color: '#0891b2', type: 'expense', class: 'cat-care'   },
+  // TRASPORTI
+  { name: 'Treno',         icon: '🚆', color: '#0891b2', type: 'expense', class: 'cat-tras'   },
+  // CASA & TECH
+  { name: 'Casa',          icon: '🏠', color: '#16a34a', type: 'expense', class: 'cat-casa'   },
+  { name: 'Tech',          icon: '💻', color: '#6366f1', type: 'expense', class: 'cat-tech'   },
+  // ABBONAMENTI
+  { name: 'Spotify',       icon: '🎵', color: '#15803d', type: 'expense', class: 'cat-spot',  parent: 'Abbonamenti' },
+  { name: 'Apple',         icon: '🍎', color: '#6b7280', type: 'expense', class: 'cat-apple', parent: 'Abbonamenti' },
+  { name: 'Abbonamento Treno', icon: '🚆', color: '#0891b2', type: 'expense', class: 'cat-tras', parent: 'Abbonamenti' },
+  { name: 'Abbonamenti',   icon: '🔄', color: '#64748b', type: 'expense', class: 'cat-sub'    },
+  // RISPARMIO & ALTRO
+  { name: 'Risparmio',     icon: '💎', color: '#2563eb', type: 'both',    class: 'cat-risp'   },
+  { name: 'Altro',         icon: '📦', color: '#6b7280', type: 'both',    class: 'cat-altro'  },
+];
 
-const CAT_CLASS = {
-  "Bar":"cat-bar","Ristoranti":"cat-rist","Divertimento":"cat-div",
-  "Trasporti":"cat-tras","Casa":"cat-casa","Spotify":"cat-spot",
-  "Risparmio":"cat-risp","Altro":"cat-altro"
-};
+// Quick lookup maps
+const CAT_ICONS = Object.fromEntries(CATEGORIES.map(c => [c.name, c.icon]));
+const CAT_CLASS = Object.fromEntries(CATEGORIES.map(c => [c.name, c.class]));
+const CAT_TYPE  = Object.fromEntries(CATEGORIES.map(c => [c.name, c.type]));
+
+// Categories that can be income
+const INCOME_CATS  = CATEGORIES.filter(c => c.type === 'income' || c.type === 'both').map(c => c.name);
+// Categories that can be expense
+const EXPENSE_CATS = CATEGORIES.filter(c => c.type === 'expense' || c.type === 'both').map(c => c.name);
 
 // ── Firebase (namespaced per account) ────
 const firebaseConfig = {
@@ -3265,14 +3342,21 @@ let lastDeleted = null, lastIndex = null;
       <div class="form-row form-group">
         <div>
           <label class="form-label">Categoria</label>
-          <select id="category" class="form-input">
+          <select id="category" class="form-input" onchange="onCategoryChange()">
             <option value="" disabled selected>Scegli…</option>
-            <option>Bar</option><option>Ristoranti</option><option>Divertimento</option>
-            <option>Trasporti</option><option>Casa</option><option>Spotify</option>
-            <option value="Risparmio">Risparmio</option><option>Altro</option>
           </select>
         </div>
-        <div>
+        <div id="subCatGroup" style="display:none;">
+          <label class="form-label">Abbonamento</label>
+          <select id="subcategory" class="form-input">
+            <option value="" disabled selected>Scegli…</option>
+            <option>Spotify</option>
+            <option>Apple</option>
+            <option>Abbonamento Treno</option>
+            <option>Altro abbonamento</option>
+          </select>
+        </div>
+        <div id="methodGroup">
           <label class="form-label">Metodo</label>
           <select id="method" class="form-input">
             <option value="" disabled selected>Scegli…</option>
@@ -3730,28 +3814,77 @@ function toggleDark() {
 }
 
 /* ── ADD TRANSACTION ────────────────────── */
+function buildCategorySelect() {
+  let sel = document.getElementById('category');
+  if (!sel) return;
+  // Show ALL non-sub categories so user can pick freely
+  // The button clicked (income/expense) determines the sign
+  sel.innerHTML = '<option value="" disabled selected>Scegli…</option>';
+
+  CATEGORIES.filter(c => !c.parent).forEach(cat => {
+    let o = document.createElement('option');
+    o.value = o.textContent = cat.name;
+    sel.appendChild(o);
+  });
+  sel.selectedIndex = 0;
+  onCategoryChange();
+}
+
+function onCategoryChange() {
+  let val = document.getElementById('category')?.value;
+  let subGroup   = document.getElementById('subCatGroup');
+  let methodGroup = document.getElementById('methodGroup');
+
+  let isAbbo = val === 'Abbonamenti';
+  if (subGroup)    subGroup.style.display    = isAbbo ? '' : 'none';
+  if (methodGroup) methodGroup.style.display = isAbbo ? 'none' : '';
+}
+
 function addTxn(isIncome) {
-  let d = document.getElementById("desc").value.trim();
-  let a = parseFloat(document.getElementById("amount").value);
-  let c = document.getElementById("category").value;
-  let m = getMonth();
-  let meth = document.getElementById("method").value;
+  let d   = document.getElementById("desc").value.trim();
+  let a   = parseFloat(document.getElementById("amount").value);
+  let cat = document.getElementById("category").value;
+  let m   = getMonth();
   let day = parseInt(document.getElementById("day").value) || new Date().getDate();
 
-  if (!d || isNaN(a) || a <= 0) { showToast("⚠️ Inserisci descrizione e importo"); return; }
-  if (!c) { showToast("⚠️ Scegli una categoria"); return; }
-  if (!meth) { showToast("⚠️ Scegli un metodo"); return; }
+  // Abbonamenti: use sub-category as actual category name
+  let isAbbo = cat === 'Abbonamenti';
+  if (isAbbo) {
+    let sub = document.getElementById("subcategory")?.value;
+    if (!sub) { showToast("⚠️ Scegli il tipo di abbonamento"); return; }
+    cat = sub;
+  }
 
-  AppState.data.push({ desc: d, amount: isIncome ? a : -a, category: c, month: m, method: meth, day });
+  let meth = isAbbo ? 'Banca' : document.getElementById("method").value;
+  if (!isAbbo && !meth) { showToast("⚠️ Scegli un metodo"); return; }
+  if (!d || isNaN(a) || a <= 0) { showToast("⚠️ Inserisci descrizione e importo"); return; }
+  if (!cat) { showToast("⚠️ Scegli una categoria"); return; }
+
+  // Guard: if category is income-only and user pressed Uscita, block
+  let catType = CAT_TYPE[cat] || 'both';
+  if (!isIncome && catType === 'income') {
+    showToast("⚠️ " + cat + " è solo per entrate");
+    return;
+  }
+  // Guard: if category is expense-only and user pressed Entrata, block
+  if (isIncome && catType === 'expense') {
+    showToast("⚠️ " + cat + " è solo per uscite");
+    return;
+  }
+
+  AppState.data.push({ desc: d, amount: isIncome ? a : -a, category: cat, month: m, method: meth, day });
   save();
 
   document.getElementById("desc").value = "";
   document.getElementById("amount").value = "";
   document.getElementById("day").value = "";
   document.getElementById("category").selectedIndex = 0;
-  document.getElementById("method").selectedIndex = 0;
+  let subSel = document.getElementById("subcategory");
+  if (subSel) subSel.selectedIndex = 0;
+  if (!isAbbo) document.getElementById("method").selectedIndex = 0;
+  onCategoryChange();
 
-  showToast("✅ Transazione aggiunta");
+  showToast(isIncome ? "✅ Entrata aggiunta" : "✅ Uscita aggiunta");
 }
 
 /* ── DELETE ─────────────────────────────── */
@@ -4345,7 +4478,7 @@ function renderAI(month, inc, out, savings, total) {
   let b50 = inc * .5, b30 = inc * .3, b20 = inc * .2;
   let spent50 = 0;
   AppState.data.forEach(i => {
-    if (i.month === month && i.amount < 0 && ['Casa','Trasporti','Spesa','Bollette'].includes(i.category))
+    if (i.month === month && i.amount < 0 && ['Casa','Treno','Abbonamento Treno'].includes(i.category))
       spent50 += Math.abs(i.amount);
   });
   let p50 = b50 > 0 ? Math.min((spent50/b50)*100,100) : 0;
@@ -4464,7 +4597,7 @@ function renderCEO(inc, out, total) {
 
   let costsHtml = '';
   let costsTotal = 0;
-  let blacklist = ['bar','spesa','ristoranti'];
+  let blacklist = ['bar','ristoranti'];
   Object.keys(subMap).forEach(name => {
     let d = subMap[name];
     if (d.cnt >= 2 && !blacklist.includes(name.toLowerCase())) {
@@ -4624,7 +4757,7 @@ function renderLifestyleInflation() {
   }
 
   // Check per category: if a non-essential category grew >20% vs prev period
-  let nonEssential = ['Bar','Ristoranti','Divertimento','Spotify','Altro'];
+  let nonEssential = ['Bar','Ristoranti','Divertimento','Spotify','Apple','Abbonamenti','Regali','Cura personale','Tech','Altro'];
   nonEssential.forEach(cat => {
     if (!catByMonth[cat]) return;
     let recentSpend   = recent.reduce((s,m) => s + (catByMonth[cat][m] || 0), 0) / recent.length;
@@ -4755,15 +4888,11 @@ function renderLifestyleInflation() {
 ════════════════════════════════════════ */
 
 // All spendable categories (exclude Risparmio which is savings, not an envelope)
-const ENV_CATEGORIES = [
-  { name: 'Bar',          icon: '☕', color: '#2563eb' },
-  { name: 'Ristoranti',  icon: '🍽️', color: '#ea580c' },
-  { name: 'Divertimento',icon: '🎮', color: '#7c3aed' },
-  { name: 'Trasporti',   icon: '🚌', color: '#0891b2' },
-  { name: 'Casa',        icon: '🏠', color: '#16a34a' },
-  { name: 'Spotify',     icon: '🎵', color: '#15803d' },
-  { name: 'Altro',       icon: '📦', color: '#6b7280' },
-];
+// Envelope categories = expense categories (auto-derived from CATEGORIES)
+// Excludes income-only and sub-categories (parent != undefined)
+const ENV_CATEGORIES = CATEGORIES
+  .filter(c => (c.type === 'expense' || c.type === 'both') && !c.parent)
+  .map(c => ({ name: c.name, icon: c.icon, color: c.color }));
 
 // Budgets stored per category per month: { "Bar:Maggio": 80, ... }
 // We persist these in localStorage under "envelopes"
@@ -5975,6 +6104,9 @@ function showTab(id, btn) {
   attachFirebaseListener();
   updateAccountPill();
   buildNav();
+
+  // Build initial category select (expense mode by default)
+  buildCategorySelect();
 
   renderAll();
 })();
