@@ -3028,7 +3028,7 @@ const CATEGORIES = [
   { name: 'Regali',        icon: '🎁', color: '#be185d', type: 'both',    class: 'cat-gift'   },
   { name: 'Cura personale',icon: '💆', color: '#0891b2', type: 'expense', class: 'cat-care'   },
   // TRASPORTI
-  { name: 'Treno',         icon: '🚆', color: '#0891b2', type: 'expense', class: 'cat-tras'   },
+  { name: 'Trasporti',     icon: '🚌', color: '#0891b2', type: 'expense', class: 'cat-tras'   },
   // CASA & TECH
   { name: 'Casa',          icon: '🏠', color: '#16a34a', type: 'expense', class: 'cat-casa'   },
   { name: 'Tech',          icon: '💻', color: '#6366f1', type: 'expense', class: 'cat-tech'   },
@@ -3478,11 +3478,11 @@ let lastDeleted = null, lastIndex = null;
       <div class="form-row form-group">
         <div>
           <label class="form-label">Importo (€)</label>
-          <input id="amount" class="form-input" type="number" placeholder="0.00" min="0" step="0.01">
+          <input id="amount" class="form-input" type="number" inputmode="decimal" placeholder="0.00" min="0" step="0.01">
         </div>
         <div>
           <label class="form-label">Giorno</label>
-          <input id="day" class="form-input" type="number" placeholder="Oggi" min="1" max="31">
+          <input id="day" class="form-input" type="number" inputmode="numeric" placeholder="Oggi" min="1" max="31">
         </div>
       </div>
 
@@ -3594,7 +3594,8 @@ let lastDeleted = null, lastIndex = null;
       <div class="env-modal">
         <div class="env-modal-title" id="envModalTitle">Imposta budget busta</div>
         <div class="env-modal-sub" id="envModalSub"></div>
-        <input type="number" class="env-modal-input" id="envModalInput" placeholder="0" min="0" step="1">
+        <input type="number" class="env-modal-input" id="envModalInput" inputmode="numeric" min="0" step="1">
+        <div style="font-size:.75rem;color:var(--text2);text-align:center;margin-bottom:8px;">Lascia vuoto per usare il budget automatico 🤖</div>
         <div class="env-modal-btns">
           <button class="env-modal-cancel" onclick="closeEnvModal()">Annulla</button>
           <button class="env-modal-save"   onclick="saveEnvBudget()">Salva</button>
@@ -3799,7 +3800,7 @@ let lastDeleted = null, lastIndex = null;
         </div>
         <div class="form-group">
           <label class="form-label">Valore (€)</label>
-          <input id="spItemValue" class="form-input" type="number" min="0" step="1" placeholder="0">
+          <input id="spItemValue" class="form-input" type="number" inputmode="numeric" min="0" step="1" placeholder="0">
         </div>
         <div class="form-group">
           <label class="form-label">Categoria</label>
@@ -3892,7 +3893,7 @@ let lastDeleted = null, lastIndex = null;
       <!-- Amount -->
       <div class="transfer-amount-wrap">
         <label class="form-label">Importo</label>
-        <input type="number" id="transferAmount" class="transfer-amount-input" placeholder="0" min="0.01" step="0.01">
+        <input type="number" id="transferAmount" class="transfer-amount-input" inputmode="decimal" placeholder="0" min="0.01" step="0.01">
       </div>
 
       <button class="transfer-save-btn" onclick="saveTransfer()">Trasferisci</button>
@@ -4174,6 +4175,7 @@ function openWalletSheet() {
             class="wallet-sheet-input"
             id="wi_${m.key}"
             type="number"
+            inputmode="numeric"
             min="0"
             step="1"
             placeholder="0"
@@ -4695,7 +4697,7 @@ function renderAI(month, inc, out, savings, total) {
   let b50 = inc * .5, b30 = inc * .3, b20 = inc * .2;
   let spent50 = 0;
   AppState.data.forEach(i => {
-    if (i.month === month && i.amount < 0 && ['Casa','Treno','Abbonamento Treno'].includes(i.category))
+    if (i.month === month && i.amount < 0 && ['Casa','Trasporti','Abbonamento Treno'].includes(i.category))
       spent50 += Math.abs(i.amount);
   });
   let p50 = b50 > 0 ? Math.min((spent50/b50)*100,100) : 0;
@@ -5129,12 +5131,24 @@ function openEnvModal(catName, month) {
   let envs = loadEnvelopes();
   let current = envs[envKey(catName, month)] || 0;
 
-  // Find cat meta
+  // Auto budget for placeholder
+  let activeM = getActiveMonths().filter(m => m !== month);
+  let vals = activeM.map(m => catSpend(m, catName)).filter(v => v > 0);
+  let autoB = 0;
+  if (vals.length > 0) {
+    let totalW = 0, sum = 0;
+    vals.forEach((v, i) => { let w = i + 1; sum += v * w; totalW += w; });
+    autoB = Math.round((sum / totalW) * 1.1);
+  }
+
   let meta = ENV_CATEGORIES.find(c => c.name === catName) || { icon: '📦' };
 
   document.getElementById('envModalTitle').textContent = meta.icon + ' ' + catName;
-  document.getElementById('envModalSub').textContent   = 'Budget per ' + month;
+  document.getElementById('envModalSub').textContent   = autoB > 0
+    ? 'Budget per ' + month + ' · Auto: ' + cur(autoB, 0) + ' (modifica per sovrascrivere)'
+    : 'Budget per ' + month;
   document.getElementById('envModalInput').value       = current || '';
+  document.getElementById('envModalInput').placeholder = autoB > 0 ? autoB.toString() : '0';
   document.getElementById('envModal').style.display    = 'flex';
   setTimeout(() => document.getElementById('envModalInput').focus(), 100);
 }
@@ -5146,7 +5160,18 @@ function closeEnvModal(e) {
 }
 
 function saveEnvBudget() {
-  let val = parseFloat(document.getElementById('envModalInput').value);
+  let raw = document.getElementById('envModalInput').value.trim();
+  let val = parseFloat(raw);
+  // Empty or 0 → remove override → revert to auto
+  if (raw === '' || val === 0) {
+    let envs = loadEnvelopes();
+    delete envs[envKey(_envEditCat, _envEditMonth)];
+    saveEnvelopes(envs);
+    document.getElementById('envModal').style.display = 'none';
+    renderEnvelopes();
+    showToast('🤖 Budget automatico ripristinato');
+    return;
+  }
   if (isNaN(val) || val < 0) { showToast('⚠️ Importo non valido'); return; }
   let envs = loadEnvelopes();
   envs[envKey(_envEditCat, _envEditMonth)] = val;
@@ -5170,6 +5195,25 @@ function renderEnvelopes() {
   let month = getMonth();
   let envs  = loadEnvelopes();
 
+  // ── Auto-budget: weighted mean of past months per category (+10% buffer)
+  // Uses same algo as Deviation tab; manual override stored in envs takes priority
+  let activeMonths = getActiveMonths().filter(m => m !== month);
+
+  function autoBudgetForCat(catName) {
+    // Use all active months except current for history; fallback to current if no history
+    let histMonths = getActiveMonths().filter(m => m !== month);
+    let allMonths  = histMonths.length > 0 ? histMonths : getActiveMonths();
+    let vals = allMonths.map(m => catSpend(m, catName)).filter(v => v > 0);
+    if (vals.length === 0) {
+      // No spend history at all for this cat
+      return 0;
+    }
+    // Weighted mean: more recent months get higher weight
+    let totalW = 0, sum = 0;
+    vals.forEach((v, i) => { let w = i + 1; sum += v * w; totalW += w; });
+    return (sum / totalW) * 1.1; // +10% buffer
+  }
+
   // Calculate spent per category this month
   let spentMap = {};
   AppState.data.forEach(i => {
@@ -5191,7 +5235,11 @@ function renderEnvelopes() {
   grid.innerHTML = '';
 
   ENV_CATEGORIES.forEach(cat => {
-    let budget = envs[envKey(cat.name, month)] || 0;
+    // Manual override wins; fallback to auto-calculated budget
+    let manualBudget = envs[envKey(cat.name, month)] || 0;
+    let autoBudg     = autoBudgetForCat(cat.name);
+    let budget       = manualBudget > 0 ? manualBudget : autoBudg;
+    let isAuto       = manualBudget === 0 && autoBudg > 0;
     let spent  = spentMap[cat.name] || 0;
     let left   = budget - spent;
     let pct    = budget > 0 ? Math.min((spent / budget) * 100, 100) : (spent > 0 ? 100 : 0);
@@ -5210,7 +5258,7 @@ function renderEnvelopes() {
         ? `<span style="color:var(--red)">−${cur(Math.abs(left), 0)} sforato</span>`
         : `<span style="color:${leftColor}">${cur(left, 0)} rimasti</span>`;
 
-    let budgetLabel = budget > 0 ? `/ ${cur(budget, 0)}` : '';
+    let budgetLabel = budget > 0 ? ('/ ' + cur(budget, 0) + (isAuto ? ' 🤖' : '')) : '';
     let spentColor  = budget === 0 ? 'var(--text)' : (isOver ? 'var(--red)' : 'var(--text)');
 
     let card = document.createElement('div');
