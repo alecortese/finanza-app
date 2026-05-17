@@ -511,6 +511,22 @@ body {
 }
 
 /* PC delete btn */
+
+.pc-edit {
+  display: none;
+  background: rgba(37,99,235,.12);
+  color: var(--blue);
+  border: none;
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: .78rem;
+  cursor: pointer;
+  margin-left: 4px;
+  flex-shrink: 0;
+  transition: opacity .15s;
+}
+.txn:hover .pc-edit { display: block; }
+@media (max-width: 1023px) { .pc-edit { display: none !important; } }
 .pc-del {
   display: none;
   background: var(--red);
@@ -2925,6 +2941,353 @@ body:not(.dark) .wallet-transfer-btn {
 }
 
 .wallet-transfer-btn:active { transform: scale(.97); opacity: .8; }
+
+/* ─────────────────────────────────────────
+   EDIT TRANSACTION SHEET
+───────────────────────────────────────── */
+.edit-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  z-index: 450;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: overlayIn .2s ease;
+}
+
+.edit-sheet {
+  background: var(--surface);
+  border-radius: 24px 24px 0 0;
+  padding: 24px 20px calc(36px + env(safe-area-inset-bottom, 0px));
+  width: 100%;
+  max-width: 520px;
+  animation: sheetUp .25s cubic-bezier(.4,0,.2,1);
+  max-height: 90svh;
+  overflow-y: auto;
+}
+
+.edit-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.edit-sheet-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.edit-sheet-close {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  font-size: .9rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font);
+  color: var(--text2);
+}
+
+.edit-sheet-type-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 5px;
+  background: var(--surface2);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+}
+
+.edit-type-btn {
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  font-size: .9rem;
+  font-weight: 700;
+  font-family: var(--font);
+  cursor: pointer;
+  background: transparent;
+  color: var(--text2);
+  transition: all .18s;
+}
+
+.edit-type-btn.active-income  { background: var(--green); color: white; }
+.edit-type-btn.active-expense { background: var(--red);   color: white; }
+
+.edit-save-btn {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: 14px;
+  background: var(--blue);
+  color: white;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: var(--font);
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(37,99,235,.3);
+  margin-top: 4px;
+  transition: opacity .15s;
+}
+.edit-save-btn:active { opacity: .85; }
+
+/* Tap hint on transactions */
+.txn { cursor: pointer; }
+
+/* ─────────────────────────────────────────
+   SETTINGS SHEET (Categorie & Metodi)
+───────────────────────────────────────── */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 500;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: overlayIn .2s ease;
+}
+
+.settings-sheet {
+  background: var(--surface);
+  border-radius: 24px 24px 0 0;
+  padding: 24px 20px calc(36px + env(safe-area-inset-bottom, 0px));
+  width: 100%;
+  max-width: 520px;
+  animation: sheetUp .25s cubic-bezier(.4,0,.2,1);
+  max-height: 90svh;
+  overflow-y: auto;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.settings-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.settings-close {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  font-size: .9rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font);
+  color: var(--text2);
+}
+
+.settings-section-title {
+  font-size: .7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--text2);
+  margin: 18px 0 10px;
+}
+
+.settings-section-title:first-of-type { margin-top: 0; }
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 13px;
+  border: 1.5px solid var(--border);
+  background: var(--surface2);
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.settings-item.active {
+  border-color: var(--blue);
+  background: rgba(37,99,235,.06);
+}
+
+.settings-item:active { transform: scale(.98); }
+
+.settings-item-icon {
+  font-size: 1.2rem;
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.settings-item-info { flex: 1; min-width: 0; }
+.settings-item-name { font-size: .88rem; font-weight: 700; }
+.settings-item-sub  { font-size: .72rem; color: var(--text2); margin-top: 1px; }
+
+.settings-item-check {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: .8rem;
+  transition: all .15s;
+}
+
+.settings-item.active .settings-item-check {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: white;
+}
+
+.settings-note {
+  font-size: .75rem;
+  color: var(--text2);
+  padding: 10px 0 0;
+  line-height: 1.5;
+}
+
+/* Settings: add new category/method inline form */
+.settings-add-form {
+  margin-top: 14px;
+  padding: 14px;
+  background: var(--surface2);
+  border-radius: 14px;
+  border: 1px dashed var(--border);
+}
+
+.settings-add-title {
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text2);
+  margin-bottom: 12px;
+}
+
+.settings-emoji-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.settings-emoji-btn {
+  width: 34px; height: 34px;
+  border-radius: 9px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+  font-family: var(--font);
+  flex-shrink: 0;
+}
+
+.settings-emoji-btn.sel {
+  border-color: var(--blue);
+  background: rgba(37,99,235,.1);
+  transform: scale(1.1);
+}
+
+.settings-color-row {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.settings-color-dot {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: 2.5px solid transparent;
+  cursor: pointer;
+  transition: transform .15s;
+  flex-shrink: 0;
+}
+
+.settings-color-dot.sel {
+  border-color: var(--text);
+  transform: scale(1.18);
+}
+
+.settings-type-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.settings-type-btn {
+  padding: 8px 4px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  font-size: .72rem;
+  font-weight: 700;
+  font-family: var(--font);
+  cursor: pointer;
+  color: var(--text2);
+  text-align: center;
+  transition: all .15s;
+}
+
+.settings-type-btn.sel {
+  border-color: var(--blue);
+  background: rgba(37,99,235,.08);
+  color: var(--blue);
+}
+
+.settings-add-btn {
+  width: 100%;
+  padding: 11px;
+  border: none;
+  border-radius: 11px;
+  background: var(--blue);
+  color: white;
+  font-size: .88rem;
+  font-weight: 700;
+  font-family: var(--font);
+  cursor: pointer;
+  margin-top: 8px;
+  transition: opacity .15s;
+}
+
+.settings-add-btn:active { opacity: .82; }
+
+/* Custom badge on settings item */
+.settings-item-custom {
+  font-size: .6rem;
+  font-weight: 800;
+  color: var(--blue);
+  background: rgba(37,99,235,.1);
+  padding: 1px 6px;
+  border-radius: 6px;
+  letter-spacing: .04em;
+}
+
+.settings-item-del {
+  background: none;
+  border: none;
+  color: var(--red);
+  font-size: .8rem;
+  cursor: pointer;
+  opacity: .45;
+  padding: 4px;
+  border-radius: 6px;
+  transition: opacity .15s;
+  font-family: var(--font);
+}
+
+.settings-item-del:hover { opacity: .9; }
 </style>
 </head>
 <body>
@@ -3364,15 +3727,32 @@ async function createAccount() {
   switchAccount(id);
 }
 
-function deleteAccount(id) {
-  if (!confirm('Eliminare questo account e tutti i suoi dati?')) return;
+async function deleteAccount(id) {
   let accs = loadAccounts().filter(a => a.id !== id);
   if (!accs.length) { showToast('❌ Devi avere almeno un account'); return; }
+
+  let accToDelete = loadAccounts().find(a => a.id === id);
+  if (!accToDelete) return;
+
+  // If account has a PIN, require it before deleting
+  if (accountHasPin(id)) {
+    let ok = await showPinLock(accToDelete);
+    if (!ok) return;
+  } else {
+    // No PIN: just confirm with dialog
+    if (!confirm('Eliminare "' + accToDelete.name + '" e tutti i suoi dati? Questa azione è irreversibile.')) return;
+  }
+
   saveAccounts(accs);
   localStorage.removeItem(accKey(id, 'finance'));
   localStorage.removeItem(accKey(id, 'monthlyBudgets'));
   localStorage.removeItem(accKey(id, 'walletInitial'));
   localStorage.removeItem(accKey(id, 'spItems'));
+  localStorage.removeItem(accKey(id, 'pin'));
+  localStorage.removeItem(accKey(id, 'activeCats'));
+  localStorage.removeItem(accKey(id, 'activeMethods'));
+  localStorage.removeItem(accKey(id, 'currency'));
+  localStorage.removeItem(accKey(id, 'envelopes'));
   db.ref('finance_' + id).remove();
   renderAccountList();
   showToast('🗑️ Account eliminato');
@@ -3834,7 +4214,10 @@ let lastDeleted = null, lastIndex = null;
     <div class="acc-sheet">
       <div class="acc-sheet-title">
         <span>👤 Account</span>
-        <button class="acc-close-btn" onclick="closeAccountSheet()">Chiudi</button>
+        <div style="display:flex;gap:8px;">
+          <button class="acc-close-btn" onclick="openSettings()" style="background:rgba(37,99,235,.1);color:var(--blue);border-color:rgba(37,99,235,.2);">⚙️ Impostazioni</button>
+          <button class="acc-close-btn" onclick="closeAccountSheet()">Chiudi</button>
+        </div>
       </div>
 
       <div id="accList"></div>
@@ -3897,6 +4280,81 @@ let lastDeleted = null, lastIndex = null;
       </div>
 
       <button class="transfer-save-btn" onclick="saveTransfer()">Trasferisci</button>
+    </div>
+  </div>
+
+
+  <!-- ── EDIT TRANSACTION SHEET ───────── -->
+  <div id="editOverlay" class="edit-sheet-overlay" style="display:none;" onclick="closeEditSheet(event)">
+    <div class="edit-sheet">
+      <div class="edit-sheet-header">
+        <div class="edit-sheet-title">✏️ Modifica transazione</div>
+        <button class="edit-sheet-close" onclick="closeEditSheet()">✕</button>
+      </div>
+
+      <!-- Type toggle -->
+      <div class="edit-sheet-type-row">
+        <button class="edit-type-btn" id="editBtnIncome" onclick="setEditType('income')">＋ Entrata</button>
+        <button class="edit-type-btn" id="editBtnExpense" onclick="setEditType('expense')">－ Uscita</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <input id="editDesc" class="form-input" placeholder="Descrizione">
+      </div>
+
+      <div class="form-row form-group">
+        <div>
+          <label class="form-label">Importo</label>
+          <input id="editAmount" class="form-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div>
+          <label class="form-label">Giorno</label>
+          <input id="editDay" class="form-input" type="number" inputmode="numeric" min="1" max="31" placeholder="1">
+        </div>
+      </div>
+
+      <div class="form-row form-group">
+        <div>
+          <label class="form-label">Categoria</label>
+          <select id="editCategory" class="form-input"></select>
+        </div>
+        <div>
+          <label class="form-label">Metodo</label>
+          <select id="editMethod" class="form-input">
+            <option value="" disabled>Scegli…</option>
+            <option>Casa</option><option>Contanti</option><option>Revolut</option><option>Banca</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Mese</label>
+        <select id="editMonth" class="form-input"></select>
+      </div>
+
+      <button class="edit-save-btn" onclick="saveEditTxn()">Salva modifiche</button>
+    </div>
+  </div>
+
+
+  <!-- ── SETTINGS SHEET ───────────────── -->
+  <div id="settingsOverlay" class="settings-overlay" style="display:none;" onclick="closeSettings(event)">
+    <div class="settings-sheet">
+      <div class="settings-header">
+        <div class="settings-title">⚙️ Impostazioni</div>
+        <button class="settings-close" onclick="closeSettings()">✕</button>
+      </div>
+
+      <div class="settings-section-title">Categorie attive</div>
+      <div id="settingsCats"></div>
+      <div id="settingsAddCat"></div>
+
+      <div class="settings-section-title" style="margin-top:20px;">Metodi di pagamento</div>
+      <div id="settingsMethods"></div>
+      <div id="settingsAddMethod"></div>
+
+      <div class="settings-note">💡 Le voci disattivate non appaiono nei selettori. Le transazioni esistenti restano invariate. Tocca 🗑️ su una voce custom per eliminarla.</div>
     </div>
   </div>
 
@@ -4000,7 +4458,7 @@ function buildCategorySelect() {
   // The button clicked (income/expense) determines the sign
   sel.innerHTML = '<option value="" disabled selected>Scegli…</option>';
 
-  CATEGORIES.filter(c => !c.parent).forEach(cat => {
+  getActiveCategories().forEach(cat => {
     let o = document.createElement('option');
     o.value = o.textContent = cat.name;
     sel.appendChild(o);
@@ -4215,7 +4673,9 @@ function renderWallet() {
 
   let hasInitial = Object.keys(initials).length > 0;
   let active = WALLET_METHODS.filter(m =>
-    (initials[m.key] || 0) > 0 || AppState.data.some(i => (i.method || '') === m.key)
+    getActiveMethods().some(am => am.key === m.key) ||
+    (initials[m.key] || 0) > 0 ||
+    AppState.data.some(i => (i.method || '') === m.key)
   );
 
   el.style.display = '';
@@ -4323,8 +4783,8 @@ function renderHistory() {
 
     let isSaving = item.category === 'Risparmio';
     let amtColor = item.amount > 0 ? 'var(--green)' : (isSaving ? 'var(--blue)' : 'var(--red)');
-    let icon = CAT_ICONS[item.category] || '📦';
-    let catCls = CAT_CLASS[item.category] || 'cat-altro';
+    let icon = getCatIcon(item.category);
+    let catCls = getCatClass(item.category);
     let sign = item.amount > 0 ? '+' : '';
 
     wrap.innerHTML = `
@@ -4337,9 +4797,16 @@ function renderHistory() {
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
           <div class="txn-amount" style="color:${amtColor}">${sign}${cur(Math.abs(item.amount), 2)}</div>
-          <button class="pc-del" onclick="deleteItem(${item.index})">✕</button>
+          <button class="pc-edit" onclick="event.stopPropagation();openEditSheet(${item.index})" title="Modifica">✏️</button>
+          <button class="pc-del"  onclick="event.stopPropagation();deleteItem(${item.index})">✕</button>
         </div>
       </div>`;
+
+    // Tap on txn body → open edit sheet (mobile)
+    wrap.querySelector('.txn').addEventListener('click', (e) => {
+      if (e.target.closest('.pc-del') || e.target.closest('.pc-edit')) return;
+      openEditSheet(item.index);
+    });
 
     // swipe-to-delete (touch)
     let el = wrap.querySelector('.txn');
@@ -5195,25 +5662,6 @@ function renderEnvelopes() {
   let month = getMonth();
   let envs  = loadEnvelopes();
 
-  // ── Auto-budget: weighted mean of past months per category (+10% buffer)
-  // Uses same algo as Deviation tab; manual override stored in envs takes priority
-  let activeMonths = getActiveMonths().filter(m => m !== month);
-
-  function autoBudgetForCat(catName) {
-    // Use all active months except current for history; fallback to current if no history
-    let histMonths = getActiveMonths().filter(m => m !== month);
-    let allMonths  = histMonths.length > 0 ? histMonths : getActiveMonths();
-    let vals = allMonths.map(m => catSpend(m, catName)).filter(v => v > 0);
-    if (vals.length === 0) {
-      // No spend history at all for this cat
-      return 0;
-    }
-    // Weighted mean: more recent months get higher weight
-    let totalW = 0, sum = 0;
-    vals.forEach((v, i) => { let w = i + 1; sum += v * w; totalW += w; });
-    return (sum / totalW) * 1.1; // +10% buffer
-  }
-
   // Calculate spent per category this month
   let spentMap = {};
   AppState.data.forEach(i => {
@@ -5234,12 +5682,13 @@ function renderEnvelopes() {
   if (!grid) return;
   grid.innerHTML = '';
 
+  // Smart budget: distribute monthly income across all envelopes
+  let smartBudgets = computeEnvSmartBudgets(month, envs);
+
   ENV_CATEGORIES.forEach(cat => {
-    // Manual override wins; fallback to auto-calculated budget
     let manualBudget = envs[envKey(cat.name, month)] || 0;
-    let autoBudg     = autoBudgetForCat(cat.name);
-    let budget       = manualBudget > 0 ? manualBudget : autoBudg;
-    let isAuto       = manualBudget === 0 && autoBudg > 0;
+    let budget       = smartBudgets[cat.name] || 0;
+    let isAuto       = manualBudget === 0;
     let spent  = spentMap[cat.name] || 0;
     let left   = budget - spent;
     let pct    = budget > 0 ? Math.min((spent / budget) * 100, 100) : (spent > 0 ? 100 : 0);
@@ -5291,7 +5740,11 @@ function renderEnvelopes() {
 
   // Summary row
   let totalLeft = totalBudget - totalSpent;
-  let unalloc   = monthInc - totalBudget;
+  // With smart budgets, totalBudget == disponibile, unalloc is always ~0
+  // Show how much of income is covered
+  let monthInc2 = 0;
+  AppState.data.forEach(i => { if (i.month === month && i.amount > 0) monthInc2 += i.amount; });
+  let unalloc = monthInc2 - totalBudget;
 
   let tBudgetEl = document.getElementById('envTotalBudget');
   let tSpentEl  = document.getElementById('envTotalSpent');
@@ -5306,8 +5759,8 @@ function renderEnvelopes() {
   }
   if (tUnalEl) {
     let unallocFormatted = (unalloc >= 0 ? '+' : '') + cur(unalloc, 0);
-    tUnalEl.textContent  = monthInc > 0 ? unallocFormatted : '—';
-    tUnalEl.style.color  = unalloc < 0 ? 'var(--red)' : unalloc === 0 ? 'var(--green)' : 'var(--blue)';
+    tUnalEl.textContent  = monthInc2 > 0 ? unallocFormatted : '—';
+    tUnalEl.style.color  = unalloc < 0 ? 'var(--red)' : Math.abs(unalloc) < 1 ? 'var(--green)' : 'var(--blue)';
   }
 }
 
@@ -6430,6 +6883,694 @@ function saveTransfer() {
   showToast('✅ Trasferito ' + cur(amount, 0) + ' da ' + fromLabel + ' a ' + toLabel);
 }
 
+
+/* ═══════════════════════════════════════
+   EDIT TRANSACTION
+════════════════════════════════════════ */
+
+let _editIndex = null;   // index in AppState.data being edited
+let _editIsIncome = false;
+
+function openEditSheet(index) {
+  _editIndex = index;
+  let item = AppState.data[index];
+  if (!item) return;
+
+  _editIsIncome = item.amount > 0;
+
+  // Populate type toggle
+  setEditType(_editIsIncome ? 'income' : 'expense');
+
+  // Populate fields
+  document.getElementById('editDesc').value   = item.desc || '';
+  document.getElementById('editAmount').value = Math.abs(item.amount);
+  document.getElementById('editDay').value    = item.day || '';
+
+  // Populate category select (all categories)
+  let catSel = document.getElementById('editCategory');
+  catSel.innerHTML = '';
+  getActiveCategories().forEach(cat => {
+    let o = document.createElement('option');
+    o.value = o.textContent = cat.name;
+    catSel.appendChild(o);
+  });
+  // Add Trasferimento if needed
+  if (item.category === 'Trasferimento') {
+    let o = document.createElement('option');
+    o.value = o.textContent = 'Trasferimento';
+    catSel.appendChild(o);
+  }
+  catSel.value = item.category || '';
+
+  // Populate month select
+  let monthSel = document.getElementById('editMonth');
+  monthSel.innerHTML = '';
+  MONTHS.forEach(m => {
+    let o = document.createElement('option');
+    o.value = o.textContent = m;
+    monthSel.appendChild(o);
+  });
+  monthSel.value = item.month || getMonth();
+
+  // Method
+  let methSel = document.getElementById('editMethod');
+  methSel.value = item.method || '';
+
+  document.getElementById('editOverlay').style.display = 'flex';
+}
+
+function setEditType(type) {
+  _editIsIncome = type === 'income';
+  let bi = document.getElementById('editBtnIncome');
+  let be = document.getElementById('editBtnExpense');
+  if (bi) { bi.className = 'edit-type-btn' + (_editIsIncome ? ' active-income' : ''); }
+  if (be) { be.className = 'edit-type-btn' + (!_editIsIncome ? ' active-expense' : ''); }
+}
+
+function closeEditSheet(e) {
+  let overlay = document.getElementById('editOverlay');
+  if (!overlay) return;
+  if (!e || e.target === overlay) overlay.style.display = 'none';
+}
+
+function saveEditTxn() {
+  if (_editIndex === null) return;
+
+  let desc   = document.getElementById('editDesc').value.trim();
+  let amount = parseFloat(document.getElementById('editAmount').value);
+  let day    = parseInt(document.getElementById('editDay').value) || 1;
+  let cat    = document.getElementById('editCategory').value;
+  let method = document.getElementById('editMethod').value;
+  let month  = document.getElementById('editMonth').value;
+
+  if (!desc)            { showToast('⚠️ Inserisci una descrizione'); return; }
+  if (isNaN(amount) || amount <= 0) { showToast('⚠️ Importo non valido'); return; }
+  if (!cat)             { showToast('⚠️ Scegli una categoria'); return; }
+  if (!method)          { showToast('⚠️ Scegli un metodo'); return; }
+
+  // Update in place
+  AppState.data[_editIndex] = {
+    ...AppState.data[_editIndex],
+    desc,
+    amount: _editIsIncome ? amount : -amount,
+    day,
+    category: cat,
+    method,
+    month,
+  };
+
+  save();
+  document.getElementById('editOverlay').style.display = 'none';
+  showToast('✅ Transazione aggiornata');
+}
+
+
+/* ═══════════════════════════════════════
+   ENVELOPE SMART BUDGET ALLOCATION
+   Logica: il saldo del mese (entrate - spese previste) viene smistato
+   tra tutte le buste in proporzione alle spese storiche medie.
+   Le buste con manualBudget sovrascrivono la quota proporzionale.
+════════════════════════════════════════ */
+
+function computeEnvSmartBudgets(month, envs) {
+  // Step 1: calcola saldo disponibile del mese
+  let monthInc = 0, monthExpNow = 0;
+  AppState.data.forEach(i => {
+    if (i.month !== month) return;
+    if (i.amount > 0) monthInc += i.amount;
+    else if (i.category !== 'Trasferimento') monthExpNow += Math.abs(i.amount);
+  });
+
+  // Saldo disponibile = entrate mese (se 0, usa media storica entrate)
+  let activeM = getActiveMonths();
+  let avgInc  = activeM.length > 0
+    ? activeM.reduce((s, m) => s + monthIncome(m), 0) / activeM.length
+    : 0;
+  let disponibile = monthInc > 0 ? monthInc : avgInc;
+
+  // Step 2: per ogni busta, calcola la media storica delle spese
+  let catAvgs = {};
+  let totalAvg = 0;
+  ENV_CATEGORIES.forEach(cat => {
+    let histM  = activeM.filter(m => m !== month);
+    let source = histM.length > 0 ? histM : activeM;
+    let vals   = source.map(m => catSpend(m, cat.name)).filter(v => v > 0);
+    let avg    = vals.length > 0
+      ? vals.reduce((s, v) => s + v, 0) / vals.length
+      : 0;
+    catAvgs[cat.name] = avg;
+    totalAvg += avg;
+  });
+
+  // Se nessun storico, distribuisci in parti uguali
+  if (totalAvg === 0) {
+    let eq = disponibile / ENV_CATEGORIES.length;
+    let result = {};
+    ENV_CATEGORIES.forEach(cat => { result[cat.name] = eq; });
+    return result;
+  }
+
+  // Step 3: separa le buste con manualBudget da quelle auto
+  let manualTotal = 0;
+  let autoCats    = [];
+  ENV_CATEGORIES.forEach(cat => {
+    let manual = envs[envKey(cat.name, month)] || 0;
+    if (manual > 0) manualTotal += manual;
+    else            autoCats.push(cat.name);
+  });
+
+  // Saldo residuo da distribuire tra le buste auto
+  let residuo = Math.max(0, disponibile - manualTotal);
+
+  // Step 4: distribuisci residuo in proporzione alle medie storiche
+  let autoCatAvgTotal = autoCats.reduce((s, n) => s + (catAvgs[n] || 0), 0);
+
+  let result = {};
+  ENV_CATEGORIES.forEach(cat => {
+    let manual = envs[envKey(cat.name, month)] || 0;
+    if (manual > 0) {
+      result[cat.name] = manual;
+    } else if (autoCatAvgTotal > 0 && catAvgs[cat.name] > 0) {
+      result[cat.name] = (catAvgs[cat.name] / autoCatAvgTotal) * residuo;
+    } else if (autoCats.length > 0) {
+      // Categoria senza storico: quota residua uguale
+      result[cat.name] = residuo / autoCats.length;
+    } else {
+      result[cat.name] = 0;
+    }
+  });
+
+  return result;
+}
+
+
+/* ═══════════════════════════════════════
+   SETTINGS — CATEGORIE & METODI
+════════════════════════════════════════ */
+
+// Persisted per account
+function loadActiveCategories() {
+  let saved = localStorage.getItem(accKey(_activeAccId, 'activeCats'));
+  if (saved) return JSON.parse(saved);
+  // Default: all non-parent categories active
+  return CATEGORIES.filter(c => !c.parent).map(c => c.name);
+}
+
+function saveActiveCategories(arr) {
+  localStorage.setItem(accKey(_activeAccId, 'activeCats'), JSON.stringify(arr));
+}
+
+function loadActiveMethods() {
+  let saved = localStorage.getItem(accKey(_activeAccId, 'activeMethods'));
+  if (saved) return JSON.parse(saved);
+  return WALLET_METHODS.map(m => m.key);
+}
+
+function saveActiveMethods(arr) {
+  localStorage.setItem(accKey(_activeAccId, 'activeMethods'), JSON.stringify(arr));
+}
+
+// Filtered views used by the rest of the app
+function getActiveCategories() {
+  let active = loadActiveCategories();
+  return getAllCategories().filter(c => active.includes(c.name));
+}
+
+function getActiveMethods() {
+  let active = loadActiveMethods();
+  return getAllMethods().filter(m => active.includes(m.key));
+}
+
+// ── Open/Close ────────────────────────
+function openSettings() {
+  // Close account sheet if open
+  document.getElementById('accSheetOverlay').style.display = 'none';
+  renderSettingsSheet();
+  document.getElementById('settingsOverlay').style.display = 'flex';
+}
+
+function closeSettings(e) {
+  let overlay = document.getElementById('settingsOverlay');
+  if (!overlay) return;
+  if (!e || e.target === overlay) {
+    overlay.style.display = 'none';
+    // Rebuild category selects and wallet after settings change
+    buildCategorySelect();
+    buildMethodSelects();
+    renderAll();
+  }
+}
+
+// ── Render settings items ─────────────
+function renderSettingsSheet() {
+  let activeCats    = loadActiveCategories();
+  let activeMethods = loadActiveMethods();
+
+  // ── Categories ──────────────────────
+  let catsEl = document.getElementById('settingsCats');
+  if (catsEl) {
+    catsEl.innerHTML = '';
+
+    // Group: Entrate / Uscite / Entrambe
+    const groups = [
+      { label: 'Entrate',  types: ['income'] },
+      { label: 'Uscite',   types: ['expense'] },
+      { label: 'Entrambe', types: ['both'] },
+    ];
+
+    groups.forEach(group => {
+      let cats = CATEGORIES.filter(cat =>
+        !cat.parent && group.types.includes(cat.type)
+      );
+      if (!cats.length) return;
+
+      let groupLabel = document.createElement('div');
+      groupLabel.style.cssText = 'font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin:12px 0 6px;opacity:.7;';
+      groupLabel.textContent = group.label;
+      catsEl.appendChild(groupLabel);
+
+      cats.forEach(cat => {
+        let isActive = activeCats.includes(cat.name);
+        let item = _buildSettingsItem(
+          cat.icon, cat.color, cat.name,
+          cat.type === 'income' ? 'Solo entrate' : cat.type === 'expense' ? 'Solo uscite' : 'Entrate e uscite',
+          isActive,
+          () => {
+            let current = loadActiveCategories();
+            if (current.includes(cat.name)) {
+              if (current.length <= 1) { showToast('⚠️ Mantieni almeno una categoria'); return; }
+              saveActiveCategories(current.filter(n => n !== cat.name));
+            } else {
+              saveActiveCategories([...current, cat.name]);
+            }
+            renderSettingsSheet();
+          }
+        );
+        catsEl.appendChild(item);
+      });
+    });
+  }
+
+  // Custom categories: add to each group
+  let customCats = loadCustomCategories();
+  if (customCats.length && catsEl) {
+    let groupLabel = document.createElement('div');
+    groupLabel.style.cssText = 'font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin:12px 0 6px;opacity:.7;';
+    groupLabel.textContent = 'Custom';
+    catsEl.appendChild(groupLabel);
+    customCats.forEach((cat, idx) => {
+      let isActive = activeCats.includes(cat.name);
+      let item = _buildSettingsItem(
+        cat.icon, cat.color, cat.name,
+        cat.type === 'income' ? 'Solo entrate' : cat.type === 'expense' ? 'Solo uscite' : 'Entrambe',
+        isActive,
+        () => {
+          let current = loadActiveCategories();
+          if (current.includes(cat.name)) {
+            if (current.length <= 1) { showToast('⚠️ Mantieni almeno una categoria'); return; }
+            saveActiveCategories(current.filter(n => n !== cat.name));
+          } else {
+            saveActiveCategories([...current, cat.name]);
+          }
+          renderSettingsSheet();
+        }
+      );
+      // Custom badge + delete
+      let badge = document.createElement('span');
+      badge.className = 'settings-item-custom';
+      badge.textContent = 'CUSTOM';
+      let delBtn = document.createElement('button');
+      delBtn.className = 'settings-item-del';
+      delBtn.textContent = '🗑️';
+      delBtn.title = 'Elimina';
+      delBtn.onclick = e => {
+        e.stopPropagation();
+        let c2 = loadCustomCategories().filter((_, i) => i !== idx);
+        saveCustomCategories(c2);
+        let active2 = loadActiveCategories().filter(n => n !== cat.name);
+        saveActiveCategories(active2);
+        buildCategorySelect();
+        renderSettingsSheet();
+      };
+      item.appendChild(badge);
+      item.appendChild(delBtn);
+      catsEl.appendChild(item);
+    });
+  }
+
+  // ── Methods ─────────────────────────
+  let methEl = document.getElementById('settingsMethods');
+  if (methEl) {
+    methEl.innerHTML = '';
+    getAllMethods().forEach((m, idx) => {
+      let isCustom = !!m.custom;
+      let isActive = activeMethods.includes(m.key);
+      let item = _buildSettingsItem(
+        m.icon, m.color, m.label || m.key, m.key,
+        isActive,
+        () => {
+          let current = loadActiveMethods();
+          if (current.includes(m.key)) {
+            if (current.length <= 1) { showToast('⚠️ Mantieni almeno un metodo'); return; }
+            saveActiveMethods(current.filter(k => k !== m.key));
+          } else {
+            saveActiveMethods([...current, m.key]);
+          }
+          renderSettingsSheet();
+        }
+      );
+      if (isCustom) {
+        let badge = document.createElement('span');
+        badge.className = 'settings-item-custom';
+        badge.textContent = 'CUSTOM';
+        let delBtn = document.createElement('button');
+        delBtn.className = 'settings-item-del';
+        delBtn.textContent = '🗑️';
+        delBtn.title = 'Elimina';
+        delBtn.onclick = e => {
+          e.stopPropagation();
+          let cIdx = idx - WALLET_METHODS.length;
+          let c2 = loadCustomMethods().filter((_, i) => i !== cIdx);
+          saveCustomMethods(c2);
+          let active2 = loadActiveMethods().filter(k => k !== m.key);
+          saveActiveMethods(active2);
+          buildMethodSelects();
+          renderSettingsSheet();
+        };
+        item.appendChild(badge);
+        item.appendChild(delBtn);
+      }
+      methEl.appendChild(item);
+    });
+  }
+
+  // Build add-forms
+  buildAddCatForm();
+  buildAddMethodForm();
+}
+
+function _buildSettingsItem(icon, color, name, sub, isActive, onToggle) {
+  let item = document.createElement('div');
+  item.className = 'settings-item' + (isActive ? ' active' : '');
+
+  let iconEl = document.createElement('div');
+  iconEl.className = 'settings-item-icon';
+  iconEl.style.background = color + '18';
+  iconEl.textContent = icon;
+
+  let info = document.createElement('div');
+  info.className = 'settings-item-info';
+  info.innerHTML = '<div class="settings-item-name">' + name + '</div>'
+    + '<div class="settings-item-sub">' + sub + '</div>';
+
+  let check = document.createElement('div');
+  check.className = 'settings-item-check';
+  check.textContent = isActive ? '✓' : '';
+
+  item.appendChild(iconEl);
+  item.appendChild(info);
+  item.appendChild(check);
+
+  item.onclick = () => { onToggle(); };
+  return item;
+}
+
+
+function buildMethodSelects() {
+  let methods = getActiveMethods();
+  ['method', 'editMethod'].forEach(id => {
+    let sel = document.getElementById(id);
+    if (!sel) return;
+    let prev = sel.value;
+    sel.innerHTML = '<option value="" disabled>Scegli…</option>';
+    methods.forEach(m => {
+      let o = document.createElement('option');
+      o.value = o.textContent = m.key;
+      // Use label for display if it differs from key
+      o.textContent = m.label || m.key;
+      o.value = m.key;
+      sel.appendChild(o);
+    });
+    if (prev && methods.some(m => m.key === prev)) sel.value = prev;
+    else sel.selectedIndex = 0;
+  });
+}
+
+
+/* ═══════════════════════════════════════
+   CUSTOM CATEGORIES & METHODS
+════════════════════════════════════════ */
+
+const CAT_EMOJIS  = ['🍕','🍺','🎸','⚽','🏋️','✈️','🚗','👟','💊','🐶','🎓','💈','🧴','🛍️','🏡','🔧','🎁','📱','🧾','💰','📚','🎬','🍣','🧃','☕','🛒','💡','🎮','🎵','💆'];
+const CAT_COLORS2 = ['#2563eb','#16a34a','#dc2626','#ea580c','#7c3aed','#0891b2','#be185d','#ca8a04','#6b7280','#0f766e','#9333ea','#c2410c'];
+
+function loadCustomCategories() {
+  return JSON.parse(localStorage.getItem(accKey(_activeAccId, 'customCats')) || '[]');
+}
+
+function saveCustomCategories(arr) {
+  localStorage.setItem(accKey(_activeAccId, 'customCats'), JSON.stringify(arr));
+}
+
+function loadCustomMethods() {
+  return JSON.parse(localStorage.getItem(accKey(_activeAccId, 'customMethods')) || '[]');
+}
+
+function saveCustomMethods(arr) {
+  localStorage.setItem(accKey(_activeAccId, 'customMethods'), JSON.stringify(arr));
+}
+
+// Return ALL categories (built-in + custom)
+function getAllCategories() {
+  let custom = loadCustomCategories();
+  return [...CATEGORIES.filter(c => !c.parent), ...custom];
+}
+
+// Return ALL methods (built-in + custom)
+function getAllMethods() {
+  let custom = loadCustomMethods();
+  return [...WALLET_METHODS, ...custom];
+}
+
+// ── Add-category form ─────────────────
+let _newCatEmoji = '📦';
+let _newCatColor = '#2563eb';
+let _newCatType  = 'expense';
+
+function buildAddCatForm() {
+  let el = document.getElementById('settingsAddCat');
+  if (!el) return;
+
+  el.innerHTML = '';
+  let form = document.createElement('div');
+  form.className = 'settings-add-form';
+
+  form.innerHTML = '<div class="settings-add-title">＋ Nuova categoria</div>';
+
+  // Name input
+  let nameInp = document.createElement('input');
+  nameInp.id = 'newCatName';
+  nameInp.className = 'form-input';
+  nameInp.placeholder = 'Nome categoria…';
+  nameInp.style.marginBottom = '10px';
+  form.appendChild(nameInp);
+
+  // Emoji picker
+  let emojiLabel = document.createElement('div');
+  emojiLabel.style.cssText = 'font-size:.65rem;color:var(--text2);font-weight:700;margin-bottom:5px;';
+  emojiLabel.textContent = 'EMOJI';
+  form.appendChild(emojiLabel);
+
+  let emojiRow = document.createElement('div');
+  emojiRow.className = 'settings-emoji-row';
+  CAT_EMOJIS.forEach(e => {
+    let btn = document.createElement('button');
+    btn.className = 'settings-emoji-btn' + (e === _newCatEmoji ? ' sel' : '');
+    btn.textContent = e;
+    btn.onclick = () => {
+      _newCatEmoji = e;
+      form.querySelectorAll('.settings-emoji-btn').forEach(b => b.classList.remove('sel'));
+      btn.classList.add('sel');
+    };
+    emojiRow.appendChild(btn);
+  });
+  form.appendChild(emojiRow);
+
+  // Color picker
+  let colorLabel = document.createElement('div');
+  colorLabel.style.cssText = 'font-size:.65rem;color:var(--text2);font-weight:700;margin-bottom:5px;';
+  colorLabel.textContent = 'COLORE';
+  form.appendChild(colorLabel);
+
+  let colorRow = document.createElement('div');
+  colorRow.className = 'settings-color-row';
+  CAT_COLORS2.forEach(col => {
+    let dot = document.createElement('div');
+    dot.className = 'settings-color-dot' + (col === _newCatColor ? ' sel' : '');
+    dot.style.background = col;
+    dot.onclick = () => {
+      _newCatColor = col;
+      form.querySelectorAll('.settings-color-dot').forEach(d => d.classList.remove('sel'));
+      dot.classList.add('sel');
+    };
+    colorRow.appendChild(dot);
+  });
+  form.appendChild(colorRow);
+
+  // Type picker
+  let typeLabel = document.createElement('div');
+  typeLabel.style.cssText = 'font-size:.65rem;color:var(--text2);font-weight:700;margin-bottom:5px;';
+  typeLabel.textContent = 'TIPO';
+  form.appendChild(typeLabel);
+
+  let typeRow = document.createElement('div');
+  typeRow.className = 'settings-type-row';
+  [['expense','Solo uscite'],['income','Solo entrate'],['both','Entrambe']].forEach(([val, label]) => {
+    let btn = document.createElement('button');
+    btn.className = 'settings-type-btn' + (val === _newCatType ? ' sel' : '');
+    btn.textContent = label;
+    btn.onclick = () => {
+      _newCatType = val;
+      form.querySelectorAll('.settings-type-btn').forEach(b => b.classList.remove('sel'));
+      btn.classList.add('sel');
+    };
+    typeRow.appendChild(btn);
+  });
+  form.appendChild(typeRow);
+
+  // Add button
+  let addBtn = document.createElement('button');
+  addBtn.className = 'settings-add-btn';
+  addBtn.textContent = '＋ Aggiungi categoria';
+  addBtn.onclick = () => {
+    let name = document.getElementById('newCatName')?.value.trim();
+    if (!name) { showToast('⚠️ Inserisci un nome'); return; }
+    let allNames = getAllCategories().map(c => c.name.toLowerCase());
+    if (allNames.includes(name.toLowerCase())) { showToast('⚠️ Categoria già esistente'); return; }
+
+    let custom = loadCustomCategories();
+    custom.push({
+      name, icon: _newCatEmoji, color: _newCatColor, type: _newCatType,
+      class: 'cat-altro', custom: true
+    });
+    saveCustomCategories(custom);
+
+    // Auto-activate
+    let active = loadActiveCategories();
+    saveActiveCategories([...active, name]);
+
+    document.getElementById('newCatName').value = '';
+    buildCategorySelect();
+    renderSettingsSheet();
+    showToast('✅ Categoria "' + name + '" aggiunta');
+  };
+  form.appendChild(addBtn);
+
+  el.appendChild(form);
+}
+
+// ── Add-method form ───────────────────
+let _newMethodEmoji = '💳';
+let _newMethodColor = '#6b7280';
+
+function buildAddMethodForm() {
+  let el = document.getElementById('settingsAddMethod');
+  if (!el) return;
+
+  el.innerHTML = '';
+  let form = document.createElement('div');
+  form.className = 'settings-add-form';
+  form.innerHTML = '<div class="settings-add-title">＋ Nuovo metodo</div>';
+
+  let nameInp = document.createElement('input');
+  nameInp.id = 'newMethodName';
+  nameInp.className = 'form-input';
+  nameInp.placeholder = 'Es. N26, PayPal, Buoni pasto…';
+  nameInp.style.marginBottom = '10px';
+  form.appendChild(nameInp);
+
+  // Emoji picker (reuse a subset)
+  let methodEmojis = ['💳','🏦','💵','📱','💰','🪙','💎','🎁','🧾','🔑'];
+  let emojiLabel = document.createElement('div');
+  emojiLabel.style.cssText = 'font-size:.65rem;color:var(--text2);font-weight:700;margin-bottom:5px;';
+  emojiLabel.textContent = 'EMOJI';
+  form.appendChild(emojiLabel);
+
+  let emojiRow = document.createElement('div');
+  emojiRow.className = 'settings-emoji-row';
+  methodEmojis.forEach(e => {
+    let btn = document.createElement('button');
+    btn.className = 'settings-emoji-btn' + (e === _newMethodEmoji ? ' sel' : '');
+    btn.textContent = e;
+    btn.onclick = () => {
+      _newMethodEmoji = e;
+      form.querySelectorAll('.settings-emoji-btn').forEach(b => b.classList.remove('sel'));
+      btn.classList.add('sel');
+    };
+    emojiRow.appendChild(btn);
+  });
+  form.appendChild(emojiRow);
+
+  // Color
+  let colorLabel = document.createElement('div');
+  colorLabel.style.cssText = 'font-size:.65rem;color:var(--text2);font-weight:700;margin-bottom:5px;';
+  colorLabel.textContent = 'COLORE';
+  form.appendChild(colorLabel);
+
+  let colorRow = document.createElement('div');
+  colorRow.className = 'settings-color-row';
+  CAT_COLORS2.forEach(col => {
+    let dot = document.createElement('div');
+    dot.className = 'settings-color-dot' + (col === _newMethodColor ? ' sel' : '');
+    dot.style.background = col;
+    dot.onclick = () => {
+      _newMethodColor = col;
+      form.querySelectorAll('.settings-color-dot').forEach(d => d.classList.remove('sel'));
+      dot.classList.add('sel');
+    };
+    colorRow.appendChild(dot);
+  });
+  form.appendChild(colorRow);
+
+  let addBtn = document.createElement('button');
+  addBtn.className = 'settings-add-btn';
+  addBtn.textContent = '＋ Aggiungi metodo';
+  addBtn.onclick = () => {
+    let name = document.getElementById('newMethodName')?.value.trim();
+    if (!name) { showToast('⚠️ Inserisci un nome'); return; }
+    let allKeys = getAllMethods().map(m => (m.key || m.label || '').toLowerCase());
+    if (allKeys.includes(name.toLowerCase())) { showToast('⚠️ Metodo già esistente'); return; }
+
+    let custom = loadCustomMethods();
+    custom.push({ key: name, label: name, icon: _newMethodEmoji, color: _newMethodColor, custom: true });
+    saveCustomMethods(custom);
+
+    let active = loadActiveMethods();
+    saveActiveMethods([...active, name]);
+
+    document.getElementById('newMethodName').value = '';
+    buildMethodSelects();
+    renderSettingsSheet();
+    showToast('✅ Metodo "' + name + '" aggiunto');
+  };
+  form.appendChild(addBtn);
+  el.appendChild(form);
+}
+
+
+// Dynamic category meta (includes custom)
+function getCatIcon(name) {
+  let all = getAllCategories();
+  let found = all.find(c => c.name === name);
+  if (found) return found.icon;
+  return CAT_ICONS[name] || '📦';
+}
+function getCatClass(name) {
+  let all = getAllCategories();
+  let found = all.find(c => c.name === name);
+  if (found) return found.class || 'cat-altro';
+  return CAT_CLASS[name] || 'cat-altro';
+}
 /* ═══════════════════════════════════════
    INIT
 ════════════════════════════════════════ */
@@ -6481,6 +7622,7 @@ function saveTransfer() {
 
   // Build initial category select (expense mode by default)
   buildCategorySelect();
+  buildMethodSelects();
 
   renderAll();
 })();
