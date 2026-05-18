@@ -4382,6 +4382,7 @@ function monthData(month) {
   let inc = 0, out = 0, savings = 0;
   AppState.data.forEach(i => {
     if (i.month !== month) return;
+    if (i.transfer || i.category === 'Trasferimento') return; // escludi trasferimenti
     if (i.amount >= 0) { inc += Number(i.amount); }
     else if (i.category === 'Risparmio') { savings += Math.abs(i.amount); }
     else { out += Math.abs(i.amount); }
@@ -4390,6 +4391,7 @@ function monthData(month) {
 }
 
 function totalBalance() {
+  // Il saldo totale INCLUDE i trasferimenti (sono solo spostamenti interni)
   return AppState.data.reduce((s, i) => s + Number(i.amount), 0);
 }
 
@@ -4401,20 +4403,28 @@ function getActiveMonths() {
   return MONTHS.filter(m => set.has(m));
 }
 
-// Total spending (excl. Risparmio) for a month
+// Total spending (excl. Risparmio e Trasferimenti) for a month
 function monthSpend(month) {
   let s = 0;
   AppState.data.forEach(i => {
-    if (i.month === month && i.amount < 0 && i.category !== 'Risparmio')
+    if (i.month === month && i.amount < 0
+        && i.category !== 'Risparmio'
+        && i.category !== 'Trasferimento'
+        && !i.transfer)
       s += Math.abs(i.amount);
   });
   return s;
 }
 
-// Total income for a month
+// Total income (excl. Trasferimenti) for a month
 function monthIncome(month) {
   let s = 0;
-  AppState.data.forEach(i => { if (i.month === month && i.amount > 0) s += i.amount; });
+  AppState.data.forEach(i => {
+    if (i.month === month && i.amount > 0
+        && i.category !== 'Trasferimento'
+        && !i.transfer)
+      s += i.amount;
+  });
   return s;
 }
 
@@ -4422,7 +4432,9 @@ function monthIncome(month) {
 function catSpend(month, cat) {
   let s = 0;
   AppState.data.forEach(i => {
-    if (i.month === month && i.amount < 0 && i.category === cat) s += Math.abs(i.amount);
+    if (i.month === month && i.amount < 0 && i.category === cat
+        && !i.transfer)
+      s += Math.abs(i.amount);
   });
   return s;
 }
@@ -5073,6 +5085,7 @@ function renderAI(month, inc, out, savings, total) {
 
   AppState.data.forEach(i => {
     monthsSet.add(i.month);
+    if (i.transfer || i.category === 'Trasferimento') return;
     let a = Number(i.amount);
     if (a >= 0) { allInc += a; }
     else if (i.category === 'Risparmio') { allSav += Math.abs(a); }
@@ -5098,7 +5111,8 @@ function renderAI(month, inc, out, savings, total) {
   // Warnings (current month vs avg)
   let curCat = {};
   AppState.data.forEach(i => {
-    if (i.month === month && i.amount < 0) {
+    if (i.month === month && i.amount < 0
+        && !i.transfer && i.category !== 'Trasferimento') {
       let k = i.category;
       curCat[k] = (curCat[k] || 0) + Math.abs(i.amount);
     }
@@ -5131,7 +5145,7 @@ function renderAI(month, inc, out, savings, total) {
 
   let risparmioMese = 0;
   AppState.data.forEach(i => {
-    if (i.month === month && i.category === 'Risparmio') risparmioMese += Math.abs(i.amount);
+    if (i.month === month && i.category === 'Risparmio' && !i.transfer) risparmioMese += Math.abs(i.amount);
   });
   let obiettivoRisp = inc * 0.2;
   let percRisp = obiettivoRisp > 0 ? Math.min((risparmioMese / obiettivoRisp * 100).toFixed(0), 100) : 0;
@@ -5275,6 +5289,7 @@ function renderCEO(inc, out, total) {
   // Fixed costs
   let subMap = {};
   AppState.data.forEach(i => {
+    if (i.transfer || i.category === 'Trasferimento') return;
     let k = i.category;
     if (!subMap[k]) subMap[k] = { out: 0, inc: 0, cnt: 0 };
     if (i.amount < 0) { subMap[k].out += Math.abs(i.amount); subMap[k].cnt++; }
@@ -5314,6 +5329,7 @@ function computeLifestyleData() {
   MONTHS.forEach(m => { byMonth[m] = { inc: 0, out: 0 }; });
 
   AppState.data.forEach(i => {
+    if (i.transfer || i.category === 'Trasferimento') return;
     let a = Number(i.amount);
     let m = i.month;
     if (!byMonth[m]) return;
@@ -5337,7 +5353,7 @@ function computeLifestyleData() {
   // Category spending per month
   let catByMonth = {}; // cat -> { month -> amount }
   AppState.data.forEach(i => {
-    if (i.amount >= 0 || i.category === 'Risparmio') return;
+    if (i.amount >= 0 || i.category === 'Risparmio' || i.transfer || i.category === 'Trasferimento') return;
     let cat = i.category || 'Altro';
     if (!catByMonth[cat]) catByMonth[cat] = {};
     catByMonth[cat][i.month] = (catByMonth[cat][i.month] || 0) + Math.abs(i.amount);
@@ -6997,8 +7013,9 @@ function computeEnvSmartBudgets(month, envs) {
   let monthInc = 0, monthExpNow = 0;
   AppState.data.forEach(i => {
     if (i.month !== month) return;
+    if (i.transfer || i.category === 'Trasferimento') return;
     if (i.amount > 0) monthInc += i.amount;
-    else if (i.category !== 'Trasferimento') monthExpNow += Math.abs(i.amount);
+    else monthExpNow += Math.abs(i.amount);
   });
 
   // Saldo disponibile = entrate mese (se 0, usa media storica entrate)
