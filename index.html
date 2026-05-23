@@ -3288,6 +3288,104 @@ body:not(.dark) .wallet-transfer-btn {
 }
 
 .settings-item-del:hover { opacity: .9; }
+
+/* ─────────────────────────────────────────
+   HISTORY FILTERS
+───────────────────────────────────────── */
+
+.filter-bar {
+  margin: 0 clamp(8px,3vw,14px) 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+
+.filter-row::-webkit-scrollbar { display: none; }
+
+.filter-chip {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  font-size: .75rem;
+  font-weight: 700;
+  font-family: var(--font);
+  cursor: pointer;
+  color: var(--text2);
+  transition: all .15s;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.filter-chip.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: white;
+  box-shadow: 0 2px 8px rgba(37,99,235,.25);
+}
+
+.filter-chip.active-green {
+  background: var(--green);
+  border-color: var(--green);
+  color: white;
+}
+
+.filter-chip.active-red {
+  background: var(--red);
+  border-color: var(--red);
+  color: white;
+}
+
+.filter-summary {
+  font-size: .75rem;
+  color: var(--text2);
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filter-clear-btn {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--blue);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  padding: 2px 6px;
+}
+
+.filter-sort-btn {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  font-size: .75rem;
+  font-weight: 700;
+  font-family: var(--font);
+  cursor: pointer;
+  color: var(--text2);
+  transition: all .15s;
+  margin-left: auto;
+}
+
+.filter-sort-btn.active {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: rgba(37,99,235,.06);
+}
 </style>
 </head>
 <body>
@@ -3396,7 +3494,7 @@ const CATEGORIES = [
   { name: 'Casa',          icon: '🏠', color: '#16a34a', type: 'expense', class: 'cat-casa'   },
   { name: 'Tech',          icon: '💻', color: '#6366f1', type: 'expense', class: 'cat-tech'   },
   // ABBONAMENTI
-  { name: 'Spotify',       icon: '🎵', color: '#15803d', type: 'expense', class: 'cat-spot',  parent: 'Abbonamenti' },
+  { name: 'Spotify',       icon: '🎵', color: '#15803d', type: 'both',    class: 'cat-spot',  parent: 'Abbonamenti' },
   { name: 'Apple',         icon: '🍎', color: '#6b7280', type: 'expense', class: 'cat-apple', parent: 'Abbonamenti' },
   { name: 'Abbonamento Treno', icon: '🚆', color: '#0891b2', type: 'expense', class: 'cat-tras', parent: 'Abbonamenti' },
   { name: 'Abbonamenti',   icon: '🔄', color: '#64748b', type: 'expense', class: 'cat-sub'    },
@@ -3840,6 +3938,20 @@ let lastDeleted = null, lastIndex = null;
         <input type="text" id="searchBar" class="search-input" placeholder="Cerca..." oninput="renderHistory()">
       </div>
     </div>
+
+    <!-- Filter bar -->
+    <div class="filter-bar" id="filterBar">
+      <!-- row 1: type + method chips — built by JS -->
+      <div class="filter-row" id="filterRowType"></div>
+      <!-- row 2: category chips — built by JS -->
+      <div class="filter-row" id="filterRowCat"></div>
+      <!-- summary + clear -->
+      <div class="filter-summary" id="filterSummary" style="display:none;">
+        <span id="filterSummaryText"></span>
+        <button class="filter-clear-btn" onclick="clearFilters()">Rimuovi filtri</button>
+      </div>
+    </div>
+
     <div id="historyList" class="history-list"></div>
 
   </div>
