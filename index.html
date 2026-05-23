@@ -4563,6 +4563,7 @@ function showTab(id, btn) {
 /* ── MONTH SYNC ─────────────────────────── */
 function syncMonth(val) {
   document.getElementById('globalMonth').value = val;
+  _filterCats.clear(); _filterMethods.clear(); // reset cat/method filters on month change
   renderAll();
 }
 
@@ -4889,14 +4890,39 @@ function renderHistory() {
   let month = getMonth();
   let q = document.getElementById('searchBar')?.value.toLowerCase() || '';
 
+  // Build filter bar (updates chips UI)
+  buildFilterBar();
+
   let items = AppState.data
     .map((item, index) => ({ ...item, index }))
-    .filter(i => i.month === month &&
-      (i.desc.toLowerCase().includes(q) || (i.category||'').toLowerCase().includes(q)))
-    .sort((a, b) => (b.day || 0) - (a.day || 0));
+    .filter(i => {
+      if (i.month !== month) return false;
+      // Text search
+      if (q && !i.desc.toLowerCase().includes(q) && !(i.category||'').toLowerCase().includes(q)) return false;
+      // Type filter
+      if (_filterType === 'income'  && i.amount <= 0) return false;
+      if (_filterType === 'expense' && i.amount >= 0) return false;
+      // Category filter
+      if (_filterCats.size && !_filterCats.has(i.category)) return false;
+      // Method filter
+      if (_filterMethods.size && !_filterMethods.has(i.method)) return false;
+      return true;
+    });
+
+  // Sort
+  items.sort((a, b) => {
+    if (_filterSort === 'date-desc') return (b.day || 0) - (a.day || 0);
+    if (_filterSort === 'date-asc')  return (a.day || 0) - (b.day || 0);
+    if (_filterSort === 'amt-desc')  return Math.abs(b.amount) - Math.abs(a.amount);
+    if (_filterSort === 'amt-asc')   return Math.abs(a.amount) - Math.abs(b.amount);
+    return 0;
+  });
 
   if (items.length === 0) {
-    box.innerHTML = `<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Nessuna transazione per ${month}</div></div>`;
+    let hasFilters = _filterType || _filterCats.size || _filterMethods.size || q;
+    box.innerHTML = hasFilters
+      ? `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Nessun risultato con i filtri attivi.<br><button class="filter-clear-btn" onclick="clearFilters()" style="margin-top:8px;font-size:.85rem;">Rimuovi filtri</button></div></div>`
+      : `<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Nessuna transazione per ${month}</div></div>`;
     return;
   }
 
@@ -7700,6 +7726,133 @@ function getCatClass(name) {
   if (found) return found.class || 'cat-altro';
   return CAT_CLASS[name] || 'cat-altro';
 }
+
+/* ═══════════════════════════════════════
+   HISTORY FILTERS
+════════════════════════════════════════ */
+
+let _filterType   = null;    // 'income' | 'expense' | null
+let _filterCats   = new Set(); // set of category names
+let _filterMethods = new Set(); // set of method keys
+let _filterSort   = 'date-desc'; // 'date-desc' | 'date-asc' | 'amt-desc' | 'amt-asc'
+
+function buildFilterBar() {
+  let month = getMonth();
+
+  // Collect categories and methods actually used this month
+  let usedCats    = new Set();
+  let usedMethods = new Set();
+  AppState.data.forEach(i => {
+    if (i.month !== month) return;
+    if (i.category) usedCats.add(i.category);
+    if (i.method)   usedMethods.add(i.method);
+  });
+
+  // ── Row 1: Type + Sort + Methods ─────────────────────────────────────
+  let rowType = document.getElementById('filterRowType');
+  if (rowType) {
+    rowType.innerHTML = '';
+
+    // Type chips
+    [
+      { label: '＋ Entrate', val: 'income',  cls: 'active-green' },
+      { label: '－ Uscite',  val: 'expense', cls: 'active-red'   },
+    ].forEach(({ label, val, cls }) => {
+      let chip = document.createElement('button');
+      chip.className = 'filter-chip' + (_filterType === val ? ' ' + cls : '');
+      chip.textContent = label;
+      chip.onclick = () => {
+        _filterType = _filterType === val ? null : val;
+        buildFilterBar();
+        renderHistory();
+      };
+      rowType.appendChild(chip);
+    });
+
+    // Separator
+    let sep = document.createElement('div');
+    sep.style.cssText = 'width:1px;background:var(--border);margin:0 2px;flex-shrink:0;';
+    rowType.appendChild(sep);
+
+    // Method chips (only used this month)
+    [...usedMethods].sort().forEach(meth => {
+      let meta = getAllMethods().find(m => m.key === meth) || { icon: '💳', label: meth };
+      let isActive = _filterMethods.has(meth);
+      let chip = document.createElement('button');
+      chip.className = 'filter-chip' + (isActive ? ' active' : '');
+      chip.textContent = (meta.icon || '') + ' ' + (meta.label || meth);
+      chip.onclick = () => {
+        if (_filterMethods.has(meth)) _filterMethods.delete(meth);
+        else _filterMethods.add(meth);
+        buildFilterBar();
+        renderHistory();
+      };
+      rowType.appendChild(chip);
+    });
+
+    // Sort chip at end
+    const sortLabels = {
+      'date-desc': '↓ Data', 'date-asc': '↑ Data',
+      'amt-desc':  '↓ Importo', 'amt-asc': '↑ Importo',
+    };
+    const sortCycle = ['date-desc','date-asc','amt-desc','amt-asc'];
+    let sortBtn = document.createElement('button');
+    sortBtn.className = 'filter-sort-btn' + (_filterSort !== 'date-desc' ? ' active' : '');
+    sortBtn.textContent = sortLabels[_filterSort];
+    sortBtn.onclick = () => {
+      let idx = sortCycle.indexOf(_filterSort);
+      _filterSort = sortCycle[(idx + 1) % sortCycle.length];
+      buildFilterBar();
+      renderHistory();
+    };
+    rowType.appendChild(sortBtn);
+  }
+
+  // ── Row 2: Category chips ─────────────────────────────────────────────
+  let rowCat = document.getElementById('filterRowCat');
+  if (rowCat) {
+    rowCat.innerHTML = '';
+    [...usedCats].sort().forEach(cat => {
+      let isActive = _filterCats.has(cat);
+      let icon = getCatIcon(cat);
+      let chip = document.createElement('button');
+      chip.className = 'filter-chip' + (isActive ? ' active' : '');
+      chip.textContent = icon + ' ' + cat;
+      chip.onclick = () => {
+        if (_filterCats.has(cat)) _filterCats.delete(cat);
+        else _filterCats.add(cat);
+        buildFilterBar();
+        renderHistory();
+      };
+      rowCat.appendChild(chip);
+    });
+  }
+
+  // ── Summary bar ───────────────────────────────────────────────────────
+  let hasFilters = _filterType || _filterCats.size || _filterMethods.size || _filterSort !== 'date-desc';
+  let summaryEl  = document.getElementById('filterSummary');
+  let summaryTxt = document.getElementById('filterSummaryText');
+
+  if (summaryEl) summaryEl.style.display = hasFilters ? 'flex' : 'none';
+  if (summaryTxt && hasFilters) {
+    let parts = [];
+    if (_filterType) parts.push(_filterType === 'income' ? 'Entrate' : 'Uscite');
+    if (_filterCats.size)    parts.push([..._filterCats].join(', '));
+    if (_filterMethods.size) parts.push([..._filterMethods].join(', '));
+    if (_filterSort !== 'date-desc') parts.push(sortLabels[_filterSort]);
+    summaryTxt.textContent = parts.join(' · ');
+  }
+}
+
+function clearFilters() {
+  _filterType = null;
+  _filterCats.clear();
+  _filterMethods.clear();
+  _filterSort = 'date-desc';
+  buildFilterBar();
+  renderHistory();
+}
+
 /* ═══════════════════════════════════════
    INIT
 ════════════════════════════════════════ */
@@ -7752,6 +7905,7 @@ function getCatClass(name) {
   // Build initial category select (expense mode by default)
   buildCategorySelect();
   buildMethodSelects();
+  buildFilterBar();
 
   renderAll();
 })();
