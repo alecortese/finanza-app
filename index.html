@@ -4455,7 +4455,6 @@ let lastDeleted = null, lastIndex = null;
     <div class="settings-sheet">
       <div class="settings-header">
         <div class="settings-title">⚙️ Impostazioni</div>
-        <button class="acc-close-btn" onclick="exportAllDataCSV();closeAccountSheet();" style="background:rgba(22,163,74,.1);color:#16a34a;border-color:rgba(22,163,74,.2);">📥 Esporta CSV</button>
         <button class="settings-close" onclick="closeSettings()">✕</button>
       </div>
 
@@ -7907,42 +7906,7 @@ function clearFilters() {
   buildCategorySelect();
   buildMethodSelects();
   buildFilterBar();
-/* ═══════════════════════════════════════
-   EXPORT CSV — MIGRAZIONE BASE44
-════════════════════════════════════════ */
-function exportAllDataCSV() {
-  if (!AppState.data || AppState.data.length === 0) {
-    showToast('⚠️ Nessun dato da esportare');
-    return;
-  }
 
-  // Intestazioni colonne
-  const headers = ['descrizione','importo','categoria','mese','metodo','giorno','trasferimento'];
-
-  const rows = AppState.data.map(i => [
-    '"' + (i.desc || '').replace(/"/g, '""') + '"',
-    i.amount,
-    '"' + (i.category || '').replace(/"/g, '""') + '"',
-    '"' + (i.month || '').replace(/"/g, '""') + '"',
-    '"' + (i.method || '').replace(/"/g, '""') + '"',
-    i.day || '',
-    i.transfer ? 'true' : 'false'
-  ]);
-
-  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-
-  let a = document.createElement('a');
-  a.href = url;
-  a.download = 'finance_pro_export_' + new Date().toISOString().slice(0,10) + '.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  showToast('✅ CSV esportato! (' + AppState.data.length + ' transazioni)');
-}
   renderAll();
 })();
 </script>
