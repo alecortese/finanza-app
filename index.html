@@ -3386,52 +3386,6 @@ body:not(.dark) .wallet-transfer-btn {
   color: var(--blue);
   background: rgba(37,99,235,.06);
 }
-
-/* ─────────────────────────────────────────
-   LOADING SPLASH
-───────────────────────────────────────── */
-#loadingSplash {
-  position: fixed;
-  inset: 0;
-  background: var(--bg);
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  transition: opacity .4s ease;
-}
-
-.splash-logo {
-  font-size: 2.5rem;
-  margin-bottom: 4px;
-}
-
-.splash-title {
-  font-size: 1.2rem;
-  font-weight: 800;
-  letter-spacing: -.02em;
-  color: var(--text);
-}
-
-.splash-sub {
-  font-size: .82rem;
-  color: var(--text2);
-}
-
-.splash-spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid var(--border);
-  border-top-color: var(--blue);
-  border-radius: 50%;
-  animation: spin .8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 </style>
 </head>
 <body>
@@ -3456,6 +3410,9 @@ function loadAccounts() {
 
 function saveAccounts(accs) {
   localStorage.setItem('accounts', JSON.stringify(accs));
+  if (typeof db !== 'undefined') {
+    db.ref('accounts').set(accs).catch(err => console.warn('Firebase accounts save failed', err));
+  }
 }
 
 function getActiveAccountId() {
@@ -3574,41 +3531,74 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 let _fbListener = null;
+let _fbRootListenerPath = null;
 
-let _fbReady = false;  // true after first Firebase response
+function accountFromId(id, index) {
+  const defaultMeta = id === 'default'
+    ? { name: 'Personale', emoji: '👤', color: '#2563eb' }
+    : { name: 'Account ' + (index + 1), emoji: ACC_EMOJIS[index % ACC_EMOJIS.length], color: ACC_COLORS[index % ACC_COLORS.length] };
+
+  return { id, name: defaultMeta.name, emoji: defaultMeta.emoji, color: defaultMeta.color, createdAt: Date.now() };
+}
+
+function mergeAccounts(localAccounts, remoteAccounts) {
+  const byId = new Map();
+  [...localAccounts, ...remoteAccounts].forEach(acc => {
+    if (!acc || !acc.id) return;
+    byId.set(acc.id, { ...byId.get(acc.id), ...acc });
+  });
+  return [...byId.values()];
+}
+
+async function hydrateAccountsFromFirebase() {
+  try {
+    const snap = await db.ref().once('value');
+    const root = snap.val() || {};
+    const localAccounts = loadAccounts();
+    const remoteAccounts = Array.isArray(root.accounts) ? root.accounts : [];
+
+    const financeIds = Object.keys(root)
+      .filter(key => key.startsWith('finance_'))
+      .map(key => key.replace(/^finance_/, ''));
+
+    financeIds
+      .forEach((key, index) => {
+        const id = key;
+        if (!remoteAccounts.some(acc => acc && acc.id === id)) {
+          remoteAccounts.push(accountFromId(id, index));
+        }
+      });
+
+    const merged = mergeAccounts(localAccounts, remoteAccounts);
+    if (!merged.length) return;
+
+    localStorage.setItem('accounts', JSON.stringify(merged));
+    const activeHasRemoteData = Array.isArray(root['finance_' + _activeAccId]?.data);
+    const firstRemoteWithData = financeIds.find(id => Array.isArray(root['finance_' + id]?.data));
+    const shouldUseRemoteAccount = _activeAccId === 'default' && !activeHasRemoteData && firstRemoteWithData;
+
+    if (!merged.some(acc => acc.id === _activeAccId) || shouldUseRemoteAccount) {
+      _activeAccId = shouldUseRemoteAccount ? firstRemoteWithData : merged[0].id;
+      setActiveAccountId(_activeAccId);
+    }
+    db.ref('accounts').set(merged).catch(err => console.warn('Firebase accounts sync failed', err));
+  } catch (err) {
+    console.warn('Firebase accounts load failed', err);
+  }
+}
 
 function attachFirebaseListener() {
-  if (_fbListener) { db.ref('finance_' + _activeAccId).off('value', _fbListener); }
-  _fbReady = false;
-
-  _fbListener = db.ref('finance_' + _activeAccId).on('value', snap => {
+  // Detach previous listener if any
+  if (_fbListener && _fbRootListenerPath) { db.ref(_fbRootListenerPath).off('value', _fbListener); }
+  _fbRootListenerPath = 'finance_' + _activeAccId;
+  _fbListener = db.ref(_fbRootListenerPath).on('value', snap => {
     let d = snap.val();
-    if (d && d.data) { AppState.data = d.data; }
-
-    if (!_fbReady) {
-      _fbReady = true;
-      hideSplash();
-      renderAll();
-    } else {
+    if (d && Array.isArray(d.data)) {
+      AppState.data = d.data;
+      localStorage.setItem(accKey(_activeAccId, 'finance'), JSON.stringify(AppState.data));
       renderAll();
     }
   });
-
-  // Timeout fallback: if Firebase doesn't respond in 4s, show data from localStorage
-  setTimeout(() => {
-    if (!_fbReady) {
-      _fbReady = true;
-      hideSplash();
-      renderAll();
-    }
-  }, 4000);
-}
-
-function hideSplash() {
-  let splash = document.getElementById('loadingSplash');
-  if (!splash) return;
-  splash.style.opacity = '0';
-  setTimeout(() => splash.remove(), 400);
 }
 
 function save() {
@@ -3953,13 +3943,6 @@ let lastDeleted = null, lastIndex = null;
 <!-- ═══════════════════════════════════════
      HTML STRUCTURE
 ════════════════════════════════════════ -->
-<div id="loadingSplash">
-  <div class="splash-logo">📊</div>
-  <div class="splash-title">Finance Pro</div>
-  <div class="splash-spinner"></div>
-  <div class="splash-sub">Caricamento dati…</div>
-</div>
-
 <div class="app">
 
   <!-- TOPBAR -->
@@ -7938,7 +7921,7 @@ function clearFilters() {
 /* ═══════════════════════════════════════
    INIT
 ════════════════════════════════════════ */
-(function init() {
+(async function init() {
   // Populate month selectors
   let sel = document.getElementById('globalMonth');
   MONTHS.forEach(m => {
@@ -7980,6 +7963,9 @@ function clearFilters() {
   }
 
   // Multi-account init
+  await hydrateAccountsFromFirebase();
+  AppState.data = JSON.parse(localStorage.getItem(accKey(_activeAccId, 'finance')) || '[]');
+  AppState.monthlyBudgets = JSON.parse(localStorage.getItem(accKey(_activeAccId, 'monthlyBudgets')) || '{}');
   attachFirebaseListener();
   updateAccountPill();
   buildNav();
@@ -7988,7 +7974,8 @@ function clearFilters() {
   buildCategorySelect();
   buildMethodSelects();
   buildFilterBar();
-  // renderAll() called by Firebase listener
+
+  renderAll();
 })();
 </script>
 </body>
