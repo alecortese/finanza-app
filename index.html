@@ -3458,7 +3458,7 @@ function getCurrencyCode() {
 }
 
 function setCurrencyCode(code) {
-  localStorage.setItem(accKey(_activeAccId, 'currency'), code);
+  saveAccountFieldToFirebase('currency', code);
 }
 
 function getCurrency() {
@@ -3532,6 +3532,44 @@ const db = firebase.database();
 
 let _fbListener = null;
 let _fbRootListenerPath = null;
+const ACCOUNT_SYNC_FIELDS = [
+  'walletInitial',
+  'spItems',
+  'monthlyBudgets',
+  'envelopes',
+  'activeCats',
+  'activeMethods',
+  'customCats',
+  'customMethods',
+  'currency'
+];
+
+function readLocalAccountField(id, field) {
+  const raw = localStorage.getItem(accKey(id, field));
+  if (raw === null) return undefined;
+  if (field === 'currency') return raw;
+  try { return JSON.parse(raw); }
+  catch (err) {
+    console.warn('Local account field parse failed', field, err);
+    return undefined;
+  }
+}
+
+function defaultAccountFieldValue(field) {
+  if (['spItems', 'activeCats', 'activeMethods', 'customCats', 'customMethods'].includes(field)) return [];
+  if (field === 'currency') return 'EUR';
+  return {};
+}
+
+function writeLocalAccountField(id, field, value) {
+  const safeValue = value ?? defaultAccountFieldValue(field);
+  if (field === 'currency') localStorage.setItem(accKey(id, field), safeValue);
+  else localStorage.setItem(accKey(id, field), JSON.stringify(safeValue));
+
+  if (id === _activeAccId && field === 'monthlyBudgets') {
+    AppState.monthlyBudgets = safeValue || {};
+  }
+}
 
 function accountFromId(id, index) {
   const defaultMeta = id === 'default'
@@ -3589,14 +3627,17 @@ async function hydrateAccountsFromFirebase() {
     }
 
     merged.forEach(acc => {
-      const localWalletInitial = localStorage.getItem(accKey(acc.id, 'walletInitial'));
       const remoteAccountData = root['finance_' + acc.id] || {};
-      if (localWalletInitial && !Object.prototype.hasOwnProperty.call(remoteAccountData, 'walletInitial')) {
-        try {
-          db.ref('finance_' + acc.id).update({ walletInitial: JSON.parse(localWalletInitial) });
-        } catch (err) {
-          console.warn('Local walletInitial migration failed', acc.id, err);
+      const patch = {};
+      ACCOUNT_SYNC_FIELDS.forEach(field => {
+        const localValue = readLocalAccountField(acc.id, field);
+        if (localValue !== undefined && !Object.prototype.hasOwnProperty.call(remoteAccountData, field)) {
+          patch[field] = localValue;
         }
+      });
+      if (Object.keys(patch).length) {
+        db.ref('finance_' + acc.id).update(patch)
+          .catch(err => console.warn('Local account field migration failed', acc.id, err));
       }
     });
 
@@ -3615,15 +3656,27 @@ function attachFirebaseListener() {
     if (!d) return;
 
     let shouldRender = false;
+    let shouldRebuildControls = false;
     if (Array.isArray(d.data)) {
       AppState.data = d.data;
       localStorage.setItem(accKey(_activeAccId, 'finance'), JSON.stringify(AppState.data));
       shouldRender = true;
     }
 
-    if (Object.prototype.hasOwnProperty.call(d, 'walletInitial')) {
-      localStorage.setItem(accKey(_activeAccId, 'walletInitial'), JSON.stringify(d.walletInitial || {}));
-      shouldRender = true;
+    ACCOUNT_SYNC_FIELDS.forEach(field => {
+      if (Object.prototype.hasOwnProperty.call(d, field)) {
+        writeLocalAccountField(_activeAccId, field, d[field]);
+        if (['activeCats', 'activeMethods', 'customCats', 'customMethods'].includes(field)) {
+          shouldRebuildControls = true;
+        }
+        if (field === 'currency') updateAccountPill();
+        shouldRender = true;
+      }
+    });
+
+    if (shouldRebuildControls) {
+      buildCategorySelect();
+      buildMethodSelects();
     }
 
     if (shouldRender) {
@@ -3639,6 +3692,7 @@ function save() {
 }
 
 function saveAccountFieldToFirebase(field, value) {
+  writeLocalAccountField(_activeAccId, field, value);
   db.ref('finance_' + _activeAccId).update({ [field]: value })
     .catch(err => console.warn('Firebase field save failed', field, err));
 }
@@ -3940,6 +3994,8 @@ async function createAccount() {
 
   let chosenCurrency = document.getElementById('accNewCurrency')?.value || 'EUR';
   localStorage.setItem(accKey(id, 'currency'), chosenCurrency);
+  db.ref('finance_' + id).update({ data: [], currency: chosenCurrency })
+    .catch(err => console.warn('Firebase new account init failed', err));
 
   if (pin) {
     let hash = await hashPin(pin);
@@ -3990,7 +4046,6 @@ function loadInitialBalancesForAccount() {
 }
 
 function saveInitialBalancesForAccount(obj) {
-  localStorage.setItem(accKey(_activeAccId, 'walletInitial'), JSON.stringify(obj));
   saveAccountFieldToFirebase('walletInitial', obj);
 }
 
@@ -3999,7 +4054,7 @@ function loadSpItemsForAccount() {
 }
 
 function saveSpItemsForAccount(items) {
-  localStorage.setItem(accKey(_activeAccId, 'spItems'), JSON.stringify(items));
+  saveAccountFieldToFirebase('spItems', items);
 }
 
 let lastDeleted = null, lastIndex = null;
@@ -5868,7 +5923,7 @@ const ENV_CATEGORIES = CATEGORIES
 // We persist these in localStorage under "envelopes"
 function loadEnvelopes() { return JSON.parse(localStorage.getItem(accKey(_activeAccId,'envelopes')) || '{}'); }
 
-function saveEnvelopes(map) { localStorage.setItem(accKey(_activeAccId,'envelopes'), JSON.stringify(map)); }
+function saveEnvelopes(map) { saveAccountFieldToFirebase('envelopes', map); }
 
 function envKey(cat, month) { return cat + ':' + month; }
 
@@ -7390,7 +7445,7 @@ function loadActiveCategories() {
 }
 
 function saveActiveCategories(arr) {
-  localStorage.setItem(accKey(_activeAccId, 'activeCats'), JSON.stringify(arr));
+  saveAccountFieldToFirebase('activeCats', arr);
 }
 
 function loadActiveMethods() {
@@ -7400,7 +7455,7 @@ function loadActiveMethods() {
 }
 
 function saveActiveMethods(arr) {
-  localStorage.setItem(accKey(_activeAccId, 'activeMethods'), JSON.stringify(arr));
+  saveAccountFieldToFirebase('activeMethods', arr);
 }
 
 // Filtered views used by the rest of the app
@@ -7642,7 +7697,7 @@ function loadCustomCategories() {
 }
 
 function saveCustomCategories(arr) {
-  localStorage.setItem(accKey(_activeAccId, 'customCats'), JSON.stringify(arr));
+  saveAccountFieldToFirebase('customCats', arr);
 }
 
 function loadCustomMethods() {
@@ -7650,7 +7705,7 @@ function loadCustomMethods() {
 }
 
 function saveCustomMethods(arr) {
-  localStorage.setItem(accKey(_activeAccId, 'customMethods'), JSON.stringify(arr));
+  saveAccountFieldToFirebase('customMethods', arr);
 }
 
 // Return ALL categories (built-in + custom)
