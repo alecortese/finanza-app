@@ -3547,7 +3547,13 @@ function mergeAccounts(localAccounts, remoteAccounts) {
     if (!acc || !acc.id) return;
     byId.set(acc.id, { ...byId.get(acc.id), ...acc });
   });
-  return [...byId.values()];
+  const merged = [...byId.values()];
+  merged.forEach(acc => {
+    const localPin = localStorage.getItem(accKey(acc.id, 'pin'));
+    if (localPin && !acc.pinHash) acc.pinHash = localPin;
+    if (acc.pinHash && !localPin) localStorage.setItem(accKey(acc.id, 'pin'), acc.pinHash);
+  });
+  return merged;
 }
 
 async function hydrateAccountsFromFirebase() {
@@ -3907,7 +3913,7 @@ async function createAccount() {
 
   if (pin) {
     let hash = await hashPin(pin);
-    localStorage.setItem(accKey(id, 'pin'), hash);
+    saveAccountPin(id, hash);
   }
 
   document.getElementById('accNewName').value = '';
@@ -6579,11 +6585,39 @@ async function hashPin(pin) {
 }
 
 function getAccountPin(id) {
-  return localStorage.getItem(accKey(id, 'pin')) || null; // stored as hash
+  let localPin = localStorage.getItem(accKey(id, 'pin'));
+  if (localPin) return localPin; // stored as hash
+
+  let acc = loadAccounts().find(a => a.id === id);
+  if (acc && acc.pinHash) {
+    localStorage.setItem(accKey(id, 'pin'), acc.pinHash);
+    return acc.pinHash;
+  }
+  return null;
 }
 
 function accountHasPin(id) {
   return !!getAccountPin(id);
+}
+
+function saveAccountPin(id, hash) {
+  let accs = loadAccounts();
+  let acc = accs.find(a => a.id === id);
+  localStorage.setItem(accKey(id, 'pin'), hash);
+  if (acc) {
+    acc.pinHash = hash;
+    saveAccounts(accs);
+  }
+}
+
+function clearAccountPin(id) {
+  let accs = loadAccounts();
+  let acc = accs.find(a => a.id === id);
+  localStorage.removeItem(accKey(id, 'pin'));
+  if (acc) {
+    delete acc.pinHash;
+    saveAccounts(accs);
+  }
 }
 
 // ── PIN lock screen ────────────────────
@@ -6706,7 +6740,7 @@ function pinForgot(accId) {
     // Allow override only if user can confirm the account owner name
     let typed = prompt('Digita il nome esatto dell\'account per confermare il reset del PIN:');
     if (typed && typed.trim().toLowerCase() === name.toLowerCase()) {
-      localStorage.removeItem(accKey(accId, 'pin'));
+      clearAccountPin(accId);
       document.getElementById('pinOverlay')?.remove();
       _pinBuffer = '';
       if (_pinResolve) { _pinResolve(true); _pinResolve = null; }
@@ -6798,7 +6832,7 @@ function openPinSetup(accId) {
               setTimeout(() => { buf = ''; pinA = ''; upd(); render('new'); }, 800);
             } else {
               let hash = await hashPin(buf);
-              localStorage.setItem(accKey(accId, 'pin'), hash);
+              saveAccountPin(accId, hash);
               overlay.remove();
               document.getElementById('accSheetOverlay').style.display = 'flex';
               renderAccountList();
@@ -6821,7 +6855,7 @@ function removePinForAccount(accId) {
   // Must verify current PIN first
   showPinLock(acc).then(ok => {
     if (ok) {
-      localStorage.removeItem(accKey(accId, 'pin'));
+      clearAccountPin(accId);
       renderAccountList();
       showToast('🔓 PIN rimosso');
     }
