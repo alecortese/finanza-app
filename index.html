@@ -4033,7 +4033,7 @@ let lastDeleted = null, lastIndex = null;
     </div>
 
     <div class="card">
-      <div class="card-title">Metodo di pagamento</div>
+      <div class="card-title">Metodo di pagamento — Uscite</div>
       <canvas id="methodChart"></canvas>
     </div>
 
@@ -5074,6 +5074,8 @@ function renderMethodChart(month) {
   let map = {};
   AppState.data.forEach(i => {
     if (i.month !== month) return;
+    if (i.amount >= 0) return;
+    if (i.transfer || i.category === 'Trasferimento') return;
     let k = i.method || 'Altro';
     map[k] = (map[k] || 0) + Math.abs(i.amount);
   });
