@@ -12,6 +12,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
 <style>
@@ -2123,6 +2124,39 @@ body:not(.dark) .wallet-setup-btn {
   flex-shrink: 0;
 }
 
+.sync-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text2);
+  border-radius: 999px;
+  padding: 6px 9px;
+  font-size: .68rem;
+  font-weight: 800;
+  box-shadow: var(--shadow);
+  max-width: 120px;
+}
+
+.sync-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text2);
+  flex-shrink: 0;
+}
+
+.sync-status.saving .sync-status-dot { background: var(--orange); }
+.sync-status.synced .sync-status-dot { background: var(--green); }
+.sync-status.error .sync-status-dot { background: var(--red); }
+.sync-status.offline .sync-status-dot { background: var(--text2); }
+.sync-status-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Account manager bottom sheet */
 .acc-sheet {
   background: var(--surface);
@@ -3409,9 +3443,13 @@ function loadAccounts() {
 }
 
 function saveAccounts(accs) {
+  accs = accs.filter(acc => !acc.archived);
   localStorage.setItem('accounts', JSON.stringify(accs));
   if (typeof db !== 'undefined') {
-    db.ref('accounts').set(accs).catch(err => console.warn('Firebase accounts save failed', err));
+    markSyncSaving();
+    dbRef('accounts').set(accs)
+      .then(markSyncDone)
+      .catch(err => { markSyncError(err); console.warn('Firebase accounts save failed', err); });
   }
 }
 
@@ -3529,9 +3567,172 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+const auth = firebase.auth();
 
 let _fbListener = null;
 let _fbRootListenerPath = null;
+let _fbRefObj = null;
+let _accountsListener = null;
+let _accountsRefObj = null;
+let _authUser = null;
+let _lastSyncAt = null;
+let _lastSyncError = null;
+
+function userRoot() {
+  return _authUser ? 'users/' + _authUser.uid : '';
+}
+
+function dbRef(path) {
+  const root = userRoot();
+  return db.ref(root ? root + (path ? '/' + path : '') : path);
+}
+
+function setSyncStatus(state, text) {
+  const el = document.getElementById('syncStatus');
+  const txt = document.getElementById('syncStatusText');
+  if (!el || !txt) return;
+  el.className = 'sync-status ' + state;
+  txt.textContent = text;
+}
+
+function markSyncSaving() {
+  setSyncStatus('saving', 'Salvo...');
+}
+
+function markSyncDone() {
+  _lastSyncAt = new Date();
+  _lastSyncError = null;
+  setSyncStatus('synced', 'Sync');
+}
+
+function markSyncError(err) {
+  _lastSyncError = err ? (err.message || String(err)) : 'Errore sync';
+  setSyncStatus('error', 'Errore');
+}
+
+function attachConnectionStatus() {
+  db.ref('.info/connected').on('value', snap => {
+    if (!snap.val()) setSyncStatus('offline', 'Offline');
+    else if (!_lastSyncError) setSyncStatus(_lastSyncAt ? 'synced' : 'synced', _lastSyncAt ? 'Sync' : 'Online');
+  });
+}
+
+function renderAuthState() {
+  const label = document.getElementById('authStateLabel');
+  const sub = document.getElementById('authStateSub');
+  const form = document.getElementById('authForm');
+  const logout = document.getElementById('authLogoutBtn');
+  if (!label || !sub || !form || !logout) return;
+
+  if (_authUser) {
+    label.textContent = 'Accesso Firebase';
+    sub.textContent = _authUser.email || ('Utente ' + _authUser.uid.slice(0, 6));
+    form.style.display = 'none';
+    logout.style.display = '';
+  } else {
+    label.textContent = 'Accesso Firebase';
+    sub.textContent = 'Non collegato';
+    form.style.display = '';
+    logout.style.display = 'none';
+  }
+}
+
+function waitForAuthReady() {
+  return new Promise(resolve => {
+    const unsub = auth.onAuthStateChanged(user => {
+      _authUser = user;
+      renderAuthState();
+      unsub();
+      resolve(user);
+    });
+  });
+}
+
+async function migrateRootDataToUserIfNeeded(user) {
+  if (!user) return;
+  try {
+    const userSnap = await db.ref('users/' + user.uid + '/accounts').once('value');
+    if (userSnap.exists()) return;
+
+    const rootSnap = await db.ref().once('value');
+    const root = rootSnap.val() || {};
+    const patch = {};
+    if (Array.isArray(root.accounts)) patch.accounts = root.accounts;
+    Object.keys(root).forEach(key => {
+      if (key.startsWith('finance_')) patch[key] = root[key];
+    });
+    if (Object.keys(patch).length) {
+      await db.ref('users/' + user.uid).update(patch);
+    }
+  } catch (err) {
+    console.warn('Firebase user migration failed', err);
+  }
+}
+
+async function refreshFirebaseScope() {
+  if (_fbListener && _fbRefObj) _fbRefObj.off('value', _fbListener);
+  if (_accountsListener && _accountsRefObj) _accountsRefObj.off('value', _accountsListener);
+  _fbListener = null;
+  _accountsListener = null;
+  _fbRefObj = null;
+  _accountsRefObj = null;
+  await hydrateAccountsFromFirebase();
+  AppState.data = JSON.parse(localStorage.getItem(accKey(_activeAccId, 'finance')) || '[]');
+  AppState.monthlyBudgets = JSON.parse(localStorage.getItem(accKey(_activeAccId, 'monthlyBudgets')) || '{}');
+  attachFirebaseListener();
+  attachAccountsListener();
+  updateAccountPill();
+  renderAccountList();
+  renderAll();
+}
+
+async function loginFirebase() {
+  const email = document.getElementById('authEmail')?.value.trim();
+  const pass = document.getElementById('authPassword')?.value;
+  if (!email || !pass) { showToast('Inserisci email e password'); return; }
+  try {
+    markSyncSaving();
+    const cred = await auth.signInWithEmailAndPassword(email, pass);
+    _authUser = cred.user;
+    await migrateRootDataToUserIfNeeded(_authUser);
+    await refreshFirebaseScope();
+    renderAuthState();
+    markSyncDone();
+    showToast('Login effettuato');
+  } catch (err) {
+    markSyncError(err);
+    showToast('Login non riuscito');
+    console.warn('Firebase login failed', err);
+  }
+}
+
+async function signupFirebase() {
+  const email = document.getElementById('authEmail')?.value.trim();
+  const pass = document.getElementById('authPassword')?.value;
+  if (!email || !pass) { showToast('Inserisci email e password'); return; }
+  try {
+    markSyncSaving();
+    const cred = await auth.createUserWithEmailAndPassword(email, pass);
+    _authUser = cred.user;
+    await migrateRootDataToUserIfNeeded(_authUser);
+    await refreshFirebaseScope();
+    renderAuthState();
+    markSyncDone();
+    showToast('Account login creato');
+  } catch (err) {
+    markSyncError(err);
+    showToast('Registrazione non riuscita');
+    console.warn('Firebase signup failed', err);
+  }
+}
+
+async function logoutFirebase() {
+  await auth.signOut();
+  _authUser = null;
+  renderAuthState();
+  await refreshFirebaseScope();
+  showToast('Logout effettuato');
+}
 const ACCOUNT_SYNC_FIELDS = [
   'walletInitial',
   'spItems',
@@ -3571,6 +3772,33 @@ function writeLocalAccountField(id, field, value) {
   }
 }
 
+function collectLocalAccountData(id) {
+  const data = {};
+  const financeRaw = localStorage.getItem(accKey(id, 'finance')) || localStorage.getItem('finance');
+  if (financeRaw) {
+    try { data.data = JSON.parse(financeRaw); }
+    catch (err) { console.warn('Local finance parse failed', id, err); }
+  }
+  ACCOUNT_SYNC_FIELDS.forEach(field => {
+    const value = readLocalAccountField(id, field);
+    if (value !== undefined && !isAccountFieldEmpty(field, value)) data[field] = value;
+  });
+  return data;
+}
+
+async function syncCurrentAccountNow() {
+  try {
+    markSyncSaving();
+    await dbRef('finance_' + _activeAccId).update(collectLocalAccountData(_activeAccId));
+    markSyncDone();
+    showToast('Dati sincronizzati');
+  } catch (err) {
+    markSyncError(err);
+    showToast('Sync non riuscito');
+    console.warn('Manual sync failed', err);
+  }
+}
+
 function accountFromId(id, index) {
   const defaultMeta = id === 'default'
     ? { name: 'Personale', emoji: '👤', color: '#2563eb' }
@@ -3596,7 +3824,7 @@ function mergeAccounts(localAccounts, remoteAccounts) {
 
 async function hydrateAccountsFromFirebase() {
   try {
-    const snap = await db.ref().once('value');
+    const snap = await dbRef('').once('value');
     const root = snap.val() || {};
     const localAccounts = loadAccounts();
     const remoteAccounts = Array.isArray(root.accounts) ? root.accounts : [];
@@ -3636,12 +3864,12 @@ async function hydrateAccountsFromFirebase() {
         }
       });
       if (Object.keys(patch).length) {
-        db.ref('finance_' + acc.id).update(patch)
+        dbRef('finance_' + acc.id).update(patch)
           .catch(err => console.warn('Local account field migration failed', acc.id, err));
       }
     });
 
-    db.ref('accounts').set(merged).catch(err => console.warn('Firebase accounts sync failed', err));
+    dbRef('accounts').set(merged).catch(err => console.warn('Firebase accounts sync failed', err));
   } catch (err) {
     console.warn('Firebase accounts load failed', err);
   }
@@ -3649,9 +3877,10 @@ async function hydrateAccountsFromFirebase() {
 
 function attachFirebaseListener() {
   // Detach previous listener if any
-  if (_fbListener && _fbRootListenerPath) { db.ref(_fbRootListenerPath).off('value', _fbListener); }
+  if (_fbListener && _fbRefObj) { _fbRefObj.off('value', _fbListener); }
   _fbRootListenerPath = 'finance_' + _activeAccId;
-  _fbListener = db.ref(_fbRootListenerPath).on('value', snap => {
+  _fbRefObj = dbRef(_fbRootListenerPath);
+  _fbListener = _fbRefObj.on('value', snap => {
     let d = snap.val();
     if (!d) return;
 
@@ -3685,16 +3914,45 @@ function attachFirebaseListener() {
   });
 }
 
+function attachAccountsListener() {
+  if (_accountsListener && _accountsRefObj) _accountsRefObj.off('value', _accountsListener);
+  _accountsRefObj = dbRef('accounts');
+  _accountsListener = _accountsRefObj.on('value', snap => {
+    const remoteAccounts = (snap.val() || []).filter(acc => acc && !acc.archived);
+    if (!remoteAccounts.length) return;
+
+    localStorage.setItem('accounts', JSON.stringify(remoteAccounts));
+    if (!remoteAccounts.some(acc => acc.id === _activeAccId)) {
+      _activeAccId = remoteAccounts[0].id;
+      setActiveAccountId(_activeAccId);
+      AppState.data = JSON.parse(localStorage.getItem(accKey(_activeAccId, 'finance')) || '[]');
+      AppState.monthlyBudgets = JSON.parse(localStorage.getItem(accKey(_activeAccId, 'monthlyBudgets')) || '{}');
+      attachFirebaseListener();
+    }
+
+    updateAccountPill();
+    renderAccountList();
+  }, err => {
+    markSyncError(err);
+    console.warn('Firebase accounts listener failed', err);
+  });
+}
+
 function save() {
   localStorage.setItem(accKey(_activeAccId, 'finance'), JSON.stringify(AppState.data));
-  db.ref('finance_' + _activeAccId).update({ data: AppState.data });
+  markSyncSaving();
+  dbRef('finance_' + _activeAccId).update({ data: AppState.data })
+    .then(markSyncDone)
+    .catch(err => { markSyncError(err); console.warn('Firebase data save failed', err); });
   renderAll();
 }
 
 function saveAccountFieldToFirebase(field, value) {
   writeLocalAccountField(_activeAccId, field, value);
-  db.ref('finance_' + _activeAccId).update({ [field]: value })
-    .catch(err => console.warn('Firebase field save failed', field, err));
+  markSyncSaving();
+  dbRef('finance_' + _activeAccId).update({ [field]: value })
+    .then(markSyncDone)
+    .catch(err => { markSyncError(err); console.warn('Firebase field save failed', field, err); });
 }
 
 // ── Switch account ────────────────────────
@@ -3890,6 +4148,35 @@ function renderAccountList() {
   let activeAcc = accs2.find(a => a.id === _activeAccId);
   if (activeAcc) {
     let hasPin = accountHasPin(_activeAccId);
+
+    let syncRow = document.createElement('div');
+    syncRow.className = 'pin-setting-row';
+    syncRow.style.marginBottom = '12px';
+    let syncInfo = document.createElement('div');
+    let syncLabel = document.createElement('div');
+    syncLabel.className = 'pin-setting-label';
+    syncLabel.textContent = 'Sincronizzazione';
+    let syncSub = document.createElement('div');
+    syncSub.className = 'pin-setting-sub';
+    syncSub.textContent = 'Forza sync o controlla stato dati';
+    syncInfo.appendChild(syncLabel);
+    syncInfo.appendChild(syncSub);
+    syncRow.appendChild(syncInfo);
+    let syncActions = document.createElement('div');
+    syncActions.style.cssText = 'display:flex;gap:6px;';
+    let syncBtn = document.createElement('button');
+    syncBtn.className = 'pin-setting-btn set';
+    syncBtn.textContent = 'Sync';
+    syncBtn.onclick = syncCurrentAccountNow;
+    let diagBtn = document.createElement('button');
+    diagBtn.className = 'pin-setting-btn';
+    diagBtn.textContent = 'Info';
+    diagBtn.onclick = showSyncDiagnostics;
+    syncActions.appendChild(syncBtn);
+    syncActions.appendChild(diagBtn);
+    syncRow.appendChild(syncActions);
+    listEl.insertBefore(syncRow, listEl.firstChild);
+
     let pinRow = document.createElement('div');
     pinRow.className = 'pin-setting-row';
     pinRow.style.marginBottom = '12px';
@@ -3940,6 +4227,29 @@ function renameAccount(id) {
   renderAccountList();
   updateAccountPill();
   showToast('Nome account aggiornato');
+}
+
+async function showSyncDiagnostics() {
+  try {
+    const remoteSnap = await dbRef('finance_' + _activeAccId).once('value');
+    const remote = remoteSnap.val() || {};
+    const local = collectLocalAccountData(_activeAccId);
+    const lines = [
+      'Account: ' + _activeAccId,
+      'Scope: ' + (userRoot() || 'root condiviso'),
+      'Login: ' + (_authUser ? (_authUser.email || _authUser.uid) : 'non collegato'),
+      'Transazioni locali: ' + ((local.data || []).length),
+      'Transazioni remote: ' + ((remote.data || []).length),
+      'Campi locali: ' + Object.keys(local).join(', '),
+      'Campi remoti: ' + Object.keys(remote).join(', '),
+      'Ultimo sync: ' + (_lastSyncAt ? _lastSyncAt.toLocaleString('it-IT') : 'mai'),
+      'Ultimo errore: ' + (_lastSyncError || 'nessuno')
+    ];
+    alert(lines.join('\n'));
+  } catch (err) {
+    markSyncError(err);
+    alert('Diagnostica non riuscita: ' + (err.message || err));
+  }
 }
 
 function buildEmojiColorPickers() {
@@ -3994,8 +4304,10 @@ async function createAccount() {
 
   let chosenCurrency = document.getElementById('accNewCurrency')?.value || 'EUR';
   localStorage.setItem(accKey(id, 'currency'), chosenCurrency);
-  db.ref('finance_' + id).update({ data: [], currency: chosenCurrency })
-    .catch(err => console.warn('Firebase new account init failed', err));
+  markSyncSaving();
+  dbRef('finance_' + id).update({ data: [], currency: chosenCurrency })
+    .then(markSyncDone)
+    .catch(err => { markSyncError(err); console.warn('Firebase new account init failed', err); });
 
   if (pin) {
     let hash = await hashPin(pin);
@@ -4009,6 +4321,40 @@ async function createAccount() {
 }
 
 async function deleteAccount(id) {
+  let before = loadAccounts();
+  let accToArchive = before.find(a => a.id === id);
+  let remaining = before.filter(a => a.id !== id);
+  if (!accToArchive) return;
+  if (!remaining.length) { showToast('Devi avere almeno un account'); return; }
+
+  if (accountHasPin(id)) {
+    let ok = await showPinLock(accToArchive);
+    if (!ok) return;
+  } else if (!confirm('Archiviare "' + accToArchive.name + '"?\n\nSparira dagli account attivi, ma i dati resteranno recuperabili su Firebase.')) {
+    return;
+  }
+
+  const archivedAt = Date.now();
+  accToArchive.archived = true;
+  accToArchive.archivedAt = archivedAt;
+  saveAccounts(remaining);
+  markSyncSaving();
+  dbRef('finance_' + id).update({ archived: true, archivedAt })
+    .then(markSyncDone)
+    .catch(err => { markSyncError(err); console.warn('Firebase account archive failed', err); });
+
+  if (_activeAccId === id) {
+    _activeAccId = remaining[0].id;
+    setActiveAccountId(_activeAccId);
+    attachFirebaseListener();
+    updateAccountPill();
+    renderAll();
+  }
+
+  renderAccountList();
+  showAccountUndo(accToArchive);
+  return;
+
   let accs = loadAccounts().filter(a => a.id !== id);
   if (!accs.length) { showToast('❌ Devi avere almeno un account'); return; }
 
@@ -4034,7 +4380,7 @@ async function deleteAccount(id) {
   localStorage.removeItem(accKey(id, 'activeMethods'));
   localStorage.removeItem(accKey(id, 'currency'));
   localStorage.removeItem(accKey(id, 'envelopes'));
-  db.ref('finance_' + id).remove();
+  dbRef('finance_' + id).remove();
   renderAccountList();
   showToast('🗑️ Account eliminato');
 }
@@ -4073,6 +4419,10 @@ let lastDeleted = null, lastIndex = null;
       <span class="account-pill-chevron">▾</span>
     </button>
     <div class="topbar-controls">
+      <div class="sync-status offline" id="syncStatus" title="Stato sincronizzazione">
+        <span class="sync-status-dot"></span>
+        <span class="sync-status-text" id="syncStatusText">Offline</span>
+      </div>
       <select id="globalMonth" class="month-pill" onchange="syncMonth(this.value)">
         <!-- populated by JS -->
       </select>
@@ -4515,6 +4865,24 @@ let lastDeleted = null, lastIndex = null;
         </div>
       </div>
 
+      <div class="pin-setting-row" style="margin-bottom:12px;">
+        <div>
+          <div class="pin-setting-label" id="authStateLabel">Accesso Firebase</div>
+          <div class="pin-setting-sub" id="authStateSub">Non collegato</div>
+        </div>
+        <button class="pin-setting-btn set" id="authLogoutBtn" onclick="logoutFirebase()" style="display:none;">Esci</button>
+      </div>
+
+      <div id="authForm" class="acc-add-form" style="margin-bottom:12px;padding:12px;">
+        <div class="acc-add-title">Login</div>
+        <input id="authEmail" class="form-input" type="email" placeholder="Email" autocomplete="email" style="margin-bottom:8px;">
+        <input id="authPassword" class="form-input" type="password" placeholder="Password" autocomplete="current-password" style="margin-bottom:10px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="acc-create-btn" onclick="loginFirebase()">Entra</button>
+          <button class="acc-create-btn" onclick="signupFirebase()">Registrati</button>
+        </div>
+      </div>
+
       <div id="accList"></div>
 
       <div class="acc-add-form">
@@ -4864,6 +5232,25 @@ function showUndo() {
   t.innerHTML = `Transazione eliminata <button class="toast-undo" onclick="undoDelete();this.closest('.toast').remove()">Annulla</button>`;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 4000);
+}
+
+function showAccountUndo(acc) {
+  let t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = `Account archiviato <button class="toast-undo" id="undoAccArchive">Annulla</button>`;
+  document.body.appendChild(t);
+  document.getElementById('undoAccArchive').onclick = () => {
+    let accs = loadAccounts();
+    delete acc.archived;
+    delete acc.archivedAt;
+    if (!accs.some(a => a.id === acc.id)) accs.push(acc);
+    saveAccounts(accs);
+    dbRef('finance_' + acc.id).update({ archived: null, archivedAt: null })
+      .catch(err => console.warn('Firebase account restore failed', err));
+    renderAccountList();
+    t.remove();
+  };
+  setTimeout(() => t.remove(), 6000);
 }
 
 /* ═══════════════════════════════════════
@@ -8111,11 +8498,16 @@ function clearFilters() {
   }
 
   // Multi-account init
+  attachConnectionStatus();
+  await waitForAuthReady();
+  if (_authUser) await migrateRootDataToUserIfNeeded(_authUser);
   await hydrateAccountsFromFirebase();
   AppState.data = JSON.parse(localStorage.getItem(accKey(_activeAccId, 'finance')) || '[]');
   AppState.monthlyBudgets = JSON.parse(localStorage.getItem(accKey(_activeAccId, 'monthlyBudgets')) || '{}');
   attachFirebaseListener();
+  attachAccountsListener();
   updateAccountPill();
+  renderAuthState();
   buildNav();
 
   // Build initial category select (expense mode by default)
