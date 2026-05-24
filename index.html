@@ -3743,6 +3743,13 @@ function renderAccountList() {
     let actions = document.createElement('div');
     actions.className = 'acc-item-actions';
 
+    let renameBtn = document.createElement('button');
+    renameBtn.className = 'acc-action-btn';
+    renameBtn.textContent = 'Nome';
+    renameBtn.title = 'Cambia nome account';
+    renameBtn.onclick = e => { e.stopPropagation(); renameAccount(acc.id); };
+    actions.appendChild(renameBtn);
+
     if (isActive) {
       let badge = document.createElement('span');
       badge.className = 'acc-active-badge';
@@ -3822,6 +3829,27 @@ function renderAccountList() {
     listEl.insertBefore(pinRow, listEl.firstChild);
   }
   renderCurrencyRow();
+}
+
+function renameAccount(id) {
+  let accs = loadAccounts();
+  let acc = accs.find(a => a.id === id);
+  if (!acc) return;
+
+  let name = prompt('Nuovo nome per questo account:', acc.name);
+  if (name === null) return;
+
+  name = name.trim();
+  if (!name) {
+    showToast('Inserisci un nome');
+    return;
+  }
+
+  acc.name = name;
+  saveAccounts(accs);
+  renderAccountList();
+  updateAccountPill();
+  showToast('Nome account aggiornato');
 }
 
 function buildEmojiColorPickers() {
