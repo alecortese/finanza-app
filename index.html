@@ -3587,6 +3587,19 @@ async function hydrateAccountsFromFirebase() {
       _activeAccId = shouldUseRemoteAccount ? firstRemoteWithData : merged[0].id;
       setActiveAccountId(_activeAccId);
     }
+
+    merged.forEach(acc => {
+      const localWalletInitial = localStorage.getItem(accKey(acc.id, 'walletInitial'));
+      const remoteAccountData = root['finance_' + acc.id] || {};
+      if (localWalletInitial && !Object.prototype.hasOwnProperty.call(remoteAccountData, 'walletInitial')) {
+        try {
+          db.ref('finance_' + acc.id).update({ walletInitial: JSON.parse(localWalletInitial) });
+        } catch (err) {
+          console.warn('Local walletInitial migration failed', acc.id, err);
+        }
+      }
+    });
+
     db.ref('accounts').set(merged).catch(err => console.warn('Firebase accounts sync failed', err));
   } catch (err) {
     console.warn('Firebase accounts load failed', err);
@@ -3599,9 +3612,21 @@ function attachFirebaseListener() {
   _fbRootListenerPath = 'finance_' + _activeAccId;
   _fbListener = db.ref(_fbRootListenerPath).on('value', snap => {
     let d = snap.val();
-    if (d && Array.isArray(d.data)) {
+    if (!d) return;
+
+    let shouldRender = false;
+    if (Array.isArray(d.data)) {
       AppState.data = d.data;
       localStorage.setItem(accKey(_activeAccId, 'finance'), JSON.stringify(AppState.data));
+      shouldRender = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(d, 'walletInitial')) {
+      localStorage.setItem(accKey(_activeAccId, 'walletInitial'), JSON.stringify(d.walletInitial || {}));
+      shouldRender = true;
+    }
+
+    if (shouldRender) {
       renderAll();
     }
   });
@@ -3611,6 +3636,11 @@ function save() {
   localStorage.setItem(accKey(_activeAccId, 'finance'), JSON.stringify(AppState.data));
   db.ref('finance_' + _activeAccId).update({ data: AppState.data });
   renderAll();
+}
+
+function saveAccountFieldToFirebase(field, value) {
+  db.ref('finance_' + _activeAccId).update({ [field]: value })
+    .catch(err => console.warn('Firebase field save failed', field, err));
 }
 
 // ── Switch account ────────────────────────
@@ -3961,6 +3991,7 @@ function loadInitialBalancesForAccount() {
 
 function saveInitialBalancesForAccount(obj) {
   localStorage.setItem(accKey(_activeAccId, 'walletInitial'), JSON.stringify(obj));
+  saveAccountFieldToFirebase('walletInitial', obj);
 }
 
 function loadSpItemsForAccount() {
