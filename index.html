@@ -3386,6 +3386,52 @@ body:not(.dark) .wallet-transfer-btn {
   color: var(--blue);
   background: rgba(37,99,235,.06);
 }
+
+/* ─────────────────────────────────────────
+   LOADING SPLASH
+───────────────────────────────────────── */
+#loadingSplash {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  transition: opacity .4s ease;
+}
+
+.splash-logo {
+  font-size: 2.5rem;
+  margin-bottom: 4px;
+}
+
+.splash-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--text);
+}
+
+.splash-sub {
+  font-size: .82rem;
+  color: var(--text2);
+}
+
+.splash-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 </style>
 </head>
 <body>
@@ -3529,13 +3575,40 @@ const db = firebase.database();
 
 let _fbListener = null;
 
+let _fbReady = false;  // true after first Firebase response
+
 function attachFirebaseListener() {
-  // Detach previous listener if any
   if (_fbListener) { db.ref('finance_' + _activeAccId).off('value', _fbListener); }
+  _fbReady = false;
+
   _fbListener = db.ref('finance_' + _activeAccId).on('value', snap => {
     let d = snap.val();
-    if (d && d.data) { AppState.data = d.data; renderAll(); }
+    if (d && d.data) { AppState.data = d.data; }
+
+    if (!_fbReady) {
+      _fbReady = true;
+      hideSplash();
+      renderAll();
+    } else {
+      renderAll();
+    }
   });
+
+  // Timeout fallback: if Firebase doesn't respond in 4s, show data from localStorage
+  setTimeout(() => {
+    if (!_fbReady) {
+      _fbReady = true;
+      hideSplash();
+      renderAll();
+    }
+  }, 4000);
+}
+
+function hideSplash() {
+  let splash = document.getElementById('loadingSplash');
+  if (!splash) return;
+  splash.style.opacity = '0';
+  setTimeout(() => splash.remove(), 400);
 }
 
 function save() {
@@ -3880,6 +3953,13 @@ let lastDeleted = null, lastIndex = null;
 <!-- ═══════════════════════════════════════
      HTML STRUCTURE
 ════════════════════════════════════════ -->
+<div id="loadingSplash">
+  <div class="splash-logo">📊</div>
+  <div class="splash-title">Finance Pro</div>
+  <div class="splash-spinner"></div>
+  <div class="splash-sub">Caricamento dati…</div>
+</div>
+
 <div class="app">
 
   <!-- TOPBAR -->
@@ -7908,8 +7988,7 @@ function clearFilters() {
   buildCategorySelect();
   buildMethodSelects();
   buildFilterBar();
-
-  renderAll();
+  // renderAll() called by Firebase listener
 })();
 </script>
 </body>
