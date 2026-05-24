@@ -4617,8 +4617,8 @@ function addTxn(isIncome) {
     cat = sub;
   }
 
-  let meth = isAbbo ? 'Banca' : document.getElementById("method").value;
-  if (!isAbbo && !meth) { showToast("⚠️ Scegli un metodo"); return; }
+  let meth = document.getElementById("method").value;
+  if (!meth) { showToast("⚠️ Scegli un metodo"); return; }
   if (!d || isNaN(a) || a <= 0) { showToast("⚠️ Inserisci descrizione e importo"); return; }
   if (!cat) { showToast("⚠️ Scegli una categoria"); return; }
 
@@ -4643,7 +4643,7 @@ function addTxn(isIncome) {
   document.getElementById("category").selectedIndex = 0;
   let subSel = document.getElementById("subcategory");
   if (subSel) subSel.selectedIndex = 0;
-  if (!isAbbo) document.getElementById("method").selectedIndex = 0;
+  document.getElementById("method").selectedIndex = 0;
   onCategoryChange();
 
   showToast(isIncome ? "✅ Entrata aggiunta" : "✅ Uscita aggiunta");
