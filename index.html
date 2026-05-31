@@ -4257,7 +4257,7 @@ function debouncedRenderAll() {
       <div class="form-row form-group">
         <div>
           <label class="form-label">Importo (€)</label>
-          <input id="amount" class="form-input" type="number" inputmode="decimal" placeholder="0.00" min="0" step="0.01">
+          <input id="amount" class="form-input" type="number" inputmode="decimal" placeholder="0.00" min="0" step="0.01" oninput="onMethodChange()">
         </div>
         <div>
           <label class="form-label">Giorno</label>
@@ -4274,9 +4274,10 @@ function debouncedRenderAll() {
         </div>
         <div id="methodGroup">
           <label class="form-label">Metodo</label>
-          <select id="method" class="form-input">
+          <select id="method" class="form-input" onchange="onMethodChange()">
             <option value="" disabled selected>Scegli…</option>
             <option>Casa</option><option>Contanti</option><option>Revolut</option><option>Banca</option>
+            <option value="__trade_republic__">📱 Trade Republic</option>
           </select>
         </div>
       </div>
@@ -4552,6 +4553,79 @@ function debouncedRenderAll() {
         <button class="tr-btn-sm tr-btn-blue" onclick="openTrPlanSheet()">+ Piano</button>
       </div>
       <div id="trSavingsPlans"></div>
+    </div>
+
+    <!-- Holdings -->
+    <!-- TR Expenses -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div class="card-title" style="margin-bottom:0">💳 Uscite carta TR</div>
+        <button class="tr-btn-sm tr-btn-blue" onclick="openTrExpenseSheet()">+ Uscita</button>
+      </div>
+      <div id="trExpenseList"></div>
+    </div>
+
+    <!-- Round Up settings -->
+    <div class="card" id="trRoundUpCard">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div class="card-title" style="margin-bottom:0">🔁 Round Up</div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <span style="font-size:.78rem;font-weight:700;color:var(--text2)">Attivo</span>
+          <div id="trRoundUpToggle" onclick="trToggleRoundUp()" style="width:42px;height:24px;border-radius:12px;background:var(--surface3);border:1px solid var(--border2);position:relative;cursor:pointer;transition:background .2s;">
+            <div id="trRoundUpKnob" style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:white;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.2);"></div>
+          </div>
+        </label>
+      </div>
+      <div id="trRoundUpBody">
+        <div style="font-size:.78rem;color:var(--text2);margin-bottom:12px;line-height:1.5;">
+          Ogni uscita viene arrotondata all'euro superiore. Il resto si accumula e viene investito automaticamente ogni <strong>martedì</strong> nell'ETF scelto.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+          <div>
+            <div class="form-label">Moltiplicatore</div>
+            <select id="trRoundUpMult" class="form-input" onchange="trSaveRoundUpSettings()" style="font-size:.88rem;">
+              <option value="1">1×</option>
+              <option value="2">2×</option>
+              <option value="5">5×</option>
+              <option value="10">10×</option>
+            </select>
+          </div>
+          <div>
+            <div class="form-label">Investi in</div>
+            <select id="trRoundUpEtf" class="form-input" onchange="trSaveRoundUpSettings()" style="font-size:.88rem;">
+              <option value="VWRA.L">FTSE All-World (VWRA)</option>
+              <option value="VWCE.DE">FTSE All-World Acc (VWCE)</option>
+              <option value="IWDA.AS">MSCI World (IWDA)</option>
+              <option value="CSPX.L">S&P 500 (CSPX)</option>
+              <option value="EIMI.L">EM IMI (EIMI)</option>
+              <option value="custom">ETF personalizzato…</option>
+            </select>
+          </div>
+        </div>
+        <div id="trRoundUpCustomRow" style="display:none;margin-bottom:12px;">
+          <div class="form-label">Nome ETF personalizzato</div>
+          <input id="trRoundUpCustom" class="form-input" placeholder="es. VWCE, MSCI World" onchange="trSaveRoundUpSettings()">
+        </div>
+        <!-- Saldo in attesa -->
+        <div style="background:var(--blue-bg);border-radius:13px;padding:14px;border:1px solid rgba(52,97,255,.18);margin-bottom:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--blue)">💰 Saldo accumulato</span>
+            <button onclick="trExecuteWeeklyInvestment(true)" style="font-size:.72rem;font-weight:700;background:var(--blue);color:white;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;">Investi ora</button>
+          </div>
+          <div style="font-size:1.5rem;font-weight:900;color:var(--blue);letter-spacing:-.02em;" id="trRoundUpPending">0,00 €</div>
+          <div style="font-size:.75rem;color:var(--text2);margin-top:4px;" id="trRoundUpNextDate">Prossimo investimento: —</div>
+        </div>
+
+        <!-- Stats totali -->
+        <div id="trRoundUpStats" style="background:var(--surface2);border-radius:13px;padding:12px;border:1px solid var(--border);font-size:.8rem;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text2)">Totale investito</span><span id="trRoundUpTotal" style="font-weight:900">0,00 €</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:var(--text2)">Quote acquistate</span><span id="trRoundUpUnits" style="font-weight:900">—</span></div>
+        </div>
+
+        <!-- Storico investimenti settimanali -->
+        <div style="font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:6px;">Storico investimenti</div>
+        <div id="trRoundUpHistory"></div>
+      </div>
     </div>
 
     <!-- Holdings -->
@@ -4836,6 +4910,36 @@ function debouncedRenderAll() {
         </div>
         <button class="wallet-sheet-save" style="background:var(--red);box-shadow:0 4px 18px rgba(230,57,70,.3)" onclick="trConfirmSell()">Conferma vendita</button>
         <button onclick="closeTrSheet('trSellOverlay')" style="width:100%;padding:13px;margin-top:8px;border:1px solid var(--border2);border-radius:14px;background:none;color:var(--text2);font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--font);">Annulla</button>
+      </div>
+    </div>
+
+
+    <!-- SHEET: TR Expense -->
+    <div id="trExpenseOverlay" class="wallet-sheet-overlay" style="display:none;" onclick="closeTrSheet('trExpenseOverlay',event)">
+      <div class="wallet-sheet">
+        <div class="wallet-sheet-title">💳 Uscita carta TR</div>
+        <div class="wallet-sheet-sub">Aggiungi una spesa pagata con la carta Trade Republic.</div>
+        <div class="form-group">
+          <label class="form-label">Descrizione</label>
+          <input id="trExpDesc" class="form-input" placeholder="es. Supermercato, Netflix…">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Importo (€)</label>
+            <input id="trExpAmount" class="form-input" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" oninput="trExpPreview()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Data</label>
+            <input id="trExpDate" class="form-input" type="date">
+          </div>
+        </div>
+        <div id="trExpRoundUpPreview" style="display:none;background:linear-gradient(135deg,rgba(52,97,255,.08),rgba(52,97,255,.04));border:1px solid rgba(52,97,255,.2);border-radius:14px;padding:13px;margin-bottom:14px;">
+          <div style="font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin-bottom:8px;">🔁 Round Up attivo</div>
+          <div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:4px;"><span style="color:var(--text2)">Arrotondamento</span><span id="trExpRoundVal" style="font-weight:900">—</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:.82rem;"><span style="color:var(--text2)">Investito in</span><span id="trExpRoundEtf" style="font-weight:900;color:var(--blue)">—</span></div>
+        </div>
+        <button class="wallet-sheet-save" onclick="saveTrExpense()">Salva uscita</button>
+        <button onclick="closeTrSheet('trExpenseOverlay')" style="width:100%;padding:13px;margin-top:8px;border:1px solid var(--border2);border-radius:14px;background:none;color:var(--text2);font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--font);">Annulla</button>
       </div>
     </div>
 
@@ -5144,6 +5248,41 @@ function onCategoryChange() {
   if (methodGroup) methodGroup.style.display = '';
 }
 
+// Mostra/nasconde il banner round up quando si seleziona Trade Republic
+function onMethodChange() {
+  const meth    = document.getElementById('method')?.value;
+  const isTR    = meth === '__trade_republic__';
+  let   banner  = document.getElementById('trRoundUpMethodBanner');
+
+  if (isTR) {
+    const amount  = parseFloat(document.getElementById('amount')?.value) || 0;
+    const s       = (typeof trLoadRoundUpSettings === 'function') ? trLoadRoundUpSettings() : { enabled: false, multiplier: 1, etf: 'VWRA.L' };
+    const etfName = s.etf === 'custom' ? (s.customEtf || 'ETF') : (s.etf || 'VWRA.L');
+    const pending = s.pendingRoundUp || 0;
+    const fmtE    = v => v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'trRoundUpMethodBanner';
+      banner.style.cssText = 'background:linear-gradient(135deg,#0d9f5e18,#3461ff12);border:1px solid #0d9f5e33;border-radius:12px;padding:10px 12px;margin-top:8px;font-size:.78rem;';
+      document.getElementById('methodGroup')?.after(banner);
+    }
+
+    if (s.enabled) {
+      const ceil   = amount > 0 ? Math.ceil(amount) : 0;
+      const ruAmt  = amount > 0 ? parseFloat(((ceil - amount) * s.multiplier).toFixed(2)) : 0;
+      banner.innerHTML = `<div style="display:flex;align-items:center;gap:6px;font-weight:700;color:#0d9f5e;margin-bottom:3px;">📱 Trade Republic · Round Up attivo</div>`
+        + `<div style="color:var(--text2)">Saldo accumulato: <strong style="color:var(--blue)">${fmtE(pending)}</strong>`
+        + (ruAmt > 0 ? ` · questa spesa aggiunge <strong>+${fmtE(ruAmt)}</strong> → ${etfName}` : '')
+        + ` · investimento ogni <strong>martedì</strong></div>`;
+    } else {
+      banner.innerHTML = `<div style="color:var(--text2);display:flex;align-items:center;gap:6px;"><span>📱</span> Carta Trade Republic — <strong>Round Up disattivato</strong>. Attivalo nella sezione TR.</div>`;
+    }
+  } else if (banner) {
+    banner.remove();
+  }
+}
+
 function addTxn(isIncome) {
   let d   = document.getElementById("desc").value.trim();
   let a   = parseFloat(document.getElementById("amount").value);
@@ -5176,8 +5315,67 @@ function addTxn(isIncome) {
     return;
   }
 
-  AppState.data.push({ desc: d, amount: isIncome ? a : -a, category: cat, month: m, method: meth, day });
-  save();
+  const isTR = meth === '__trade_republic__';
+  const dateStr = new Date().toLocaleDateString('it-IT');
+
+  if (isTR && typeof TR !== 'undefined') {
+    // ── Spesa con carta Trade Republic ──
+    if (!isIncome) {
+      // Deduci da TR.cash
+      TR.cash.balance = Math.max(0, (TR.cash.balance || 0) - a);
+
+      // Calcola round up
+      const s      = trLoadRoundUpSettings();
+      const ceil   = Math.ceil(a);
+      const diff   = parseFloat((ceil - a).toFixed(2));
+      const ruAmt  = parseFloat((diff * (s.multiplier || 1)).toFixed(2));
+      const etfName = s.etf === 'custom' ? (s.customEtf || 'VWRA.L') : (s.etf || 'VWRA.L');
+
+      // Log in TR txns
+      TR.txns.push({ type: 'expense', desc: '💳 ' + d, amount: -a, date: dateStr });
+
+      // Accumula round up se attivo
+      if (s.enabled && ruAmt > 0) {
+        TR.cash.balance = Math.max(0, (TR.cash.balance || 0) - ruAmt);
+        s.pendingRoundUp = parseFloat(((s.pendingRoundUp || 0) + ruAmt).toFixed(2));
+        trRuSave('settings', s);
+        TR.txns.push({
+          type: 'roundup',
+          desc: '🔁 Round Up accumulato → ' + etfName + ' (+' + ruAmt.toFixed(2) + '€) — investimento martedì',
+          amount: -ruAmt,
+          date: dateStr
+        });
+      }
+
+      // Salva le spese TR anche nella lista expenses per la card
+      const exps = trLoadExpenses();
+      exps.push({ id: Date.now(), desc: d, amount: a, date: dateStr, roundUp: s.enabled ? ruAmt : 0, etf: etfName });
+      trSaveExpenses(exps);
+
+      trSaveAll();
+
+      let toastMsg = '✅ Uscita TR salvata';
+      if (s.enabled && ruAmt > 0) toastMsg += ' · 🔁 +' + ruAmt.toFixed(2) + '€ accumulato';
+      showToast(toastMsg);
+
+    } else {
+      // Entrata su TR (es. stipendio, dividendo)
+      TR.cash.balance = (TR.cash.balance || 0) + a;
+      TR.txns.push({ type: 'income', desc: '💚 ' + d, amount: a, date: dateStr });
+      trSaveAll();
+      showToast('✅ Entrata TR salvata');
+    }
+
+    // Registra anche in AppState per statistiche globali (marcata come TR)
+    AppState.data.push({ desc: (isIncome ? '💚 TR: ' : '💳 TR: ') + d, amount: isIncome ? a : -a, category: cat, month: m, method: '__trade_republic__', day });
+    save();
+
+  } else {
+    // ── Spesa/entrata normale ──
+    AppState.data.push({ desc: d, amount: isIncome ? a : -a, category: cat, month: m, method: meth, day });
+    save();
+    showToast(isIncome ? "✅ Entrata aggiunta" : "✅ Uscita aggiunta");
+  }
 
   document.getElementById("desc").value = "";
   document.getElementById("amount").value = "";
@@ -5188,7 +5386,11 @@ function addTxn(isIncome) {
   document.getElementById("method").selectedIndex = 0;
   onCategoryChange();
 
-  showToast(isIncome ? "✅ Entrata aggiunta" : "✅ Uscita aggiunta");
+  // Rimuovi banner TR se presente
+  document.getElementById('trRoundUpMethodBanner')?.remove();
+
+  renderAll();
+  if (isTR) { renderTrExpenses(); renderTrRoundUp(); renderTrHero(); }
 }
 
 /* ── DELETE ─────────────────────────────── */
@@ -5674,7 +5876,9 @@ function renderMethodChart(month) {
     if (i.month !== month) return;
     if (i.amount >= 0) return;
     if (i.transfer || i.category === 'Trasferimento') return;
-    let k = i.method || 'Altro';
+    let raw = i.method || 'Altro';
+    // Rinomina la chiave TR per la label del grafico
+    let k = raw === '__trade_republic__' ? '📱 Trade Republic' : raw;
     map[k] = (map[k] || 0) + Math.abs(i.amount);
   });
 
@@ -5685,11 +5889,19 @@ function renderMethodChart(month) {
   if (Object.keys(map).length === 0) { canvas.style.display = 'none'; return; }
   canvas.style.display = '';
 
+  const METHOD_COLORS = {
+    'Casa': '#16a34a', 'Portafoglio': '#ca8a04', 'Contanti': '#ca8a04',
+    'Revolut': '#7c3aed', 'Banca': '#2563eb', '📱 Trade Republic': '#0d9f5e'
+  };
+  const colors = Object.keys(map).map((k, i) =>
+    METHOD_COLORS[k] || ['#2563eb','#16a34a','#ea580c','#7c3aed','#0d9f5e','#f59e0b'][i % 6]
+  );
+
   AppState.methodChart = new Chart(canvas, {
     type: 'doughnut',
     data: {
       labels: Object.keys(map),
-      datasets: [{ data: Object.values(map), backgroundColor: ['#2563eb','#16a34a','#ea580c','#7c3aed'], borderWidth: 0, hoverOffset: 6 }]
+      datasets: [{ data: Object.values(map), backgroundColor: colors, borderWidth: 0, hoverOffset: 6 }]
     },
     options: { plugins: { legend: { position: 'bottom' } }, cutout: '65%', responsive: true }
   });
@@ -8147,6 +8359,8 @@ function _buildSettingsItem(icon, color, name, sub, isActive, onToggle) {
 
 function buildMethodSelects() {
   let methods = getActiveMethods();
+  const trMethod = { key: '__trade_republic__', label: '📱 Trade Republic' };
+
   ['method', 'editMethod'].forEach(id => {
     let sel = document.getElementById(id);
     if (!sel) return;
@@ -8154,14 +8368,24 @@ function buildMethodSelects() {
     sel.innerHTML = '<option value="" disabled>Scegli…</option>';
     methods.forEach(m => {
       let o = document.createElement('option');
-      o.value = o.textContent = m.key;
-      // Use label for display if it differs from key
       o.textContent = m.label || m.key;
       o.value = m.key;
       sel.appendChild(o);
     });
-    if (prev && methods.some(m => m.key === prev)) sel.value = prev;
+    // Aggiungi Trade Republic in fondo
+    let trOpt = document.createElement('option');
+    trOpt.value = '__trade_republic__';
+    trOpt.textContent = '📱 Trade Republic';
+    sel.appendChild(trOpt);
+
+    if (prev && (methods.some(m => m.key === prev) || prev === '__trade_republic__')) sel.value = prev;
     else sel.selectedIndex = 0;
+
+    // Collega onchange al select principale
+    if (id === 'method' && !sel.dataset.trBound) {
+      sel.dataset.trBound = '1';
+      sel.addEventListener('change', onMethodChange);
+    }
   });
 }
 
@@ -9784,6 +10008,360 @@ function trOpenDetail(idx) {
   // Start auto-refresh
   if (typeof trStartAutoRefresh==='function') trStartAutoRefresh();
 })();
+
+
+// ═══════════════════════════════════════
+// TR EXPENSES + ROUND UP (investimento settimanale ogni martedì)
+// ═══════════════════════════════════════
+
+// ── Storage keys ──
+function trRuKey(k) { return (typeof accKey === 'function' ? accKey(_activeAccId, 'tr_ru_' + k) : 'tr_ru_' + k); }
+function trRuLoad(k, def) { try { return JSON.parse(localStorage.getItem(trRuKey(k))) ?? def; } catch(e) { return def; } }
+function trRuSave(k, v)   { localStorage.setItem(trRuKey(k), JSON.stringify(v)); }
+
+// ── Default settings ──
+function trLoadRoundUpSettings() {
+  return trRuLoad('settings', {
+    enabled: false, multiplier: 1, etf: 'VWRA.L', customEtf: '',
+    totalRounded: 0,
+    pendingRoundUp: 0,       // saldo accumulato in attesa di investimento
+    lastInvestDate: null     // ultima data di investimento (YYYY-MM-DD)
+  });
+}
+
+// ─────────────────────────────────────────
+// LOGICA INVESTIMENTO MARTEDÌ
+// ─────────────────────────────────────────
+
+// Restituisce la stringa YYYY-MM-DD del martedì corrente (o dell'ultimo martedì)
+function trGetThisTuesdayStr(fromDate) {
+  const d = fromDate ? new Date(fromDate) : new Date();
+  const day = d.getDay(); // 0=dom,1=lun,2=mar,...
+  const diff = (day >= 2) ? (day - 2) : (day + 5); // giorni da sottrarre per arrivare al martedì precedente/corrente
+  d.setDate(d.getDate() - diff);
+  return d.toISOString().slice(0,10);
+}
+
+// Calcola il prossimo martedì
+function trNextTuesdayStr() {
+  const d = new Date();
+  const day = d.getDay();
+  const daysAhead = (day === 2) ? 7 : (2 - day + 7) % 7;
+  d.setDate(d.getDate() + (daysAhead === 0 ? 7 : daysAhead));
+  return d.toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
+}
+
+// Verifica se oggi è martedì e se non abbiamo già investito questo martedì
+function trShouldInvestToday() {
+  const today = new Date();
+  if (today.getDay() !== 2) return false; // non è martedì
+  const s = trLoadRoundUpSettings();
+  if (!s.enabled || (s.pendingRoundUp || 0) <= 0) return false;
+  const todayStr = today.toISOString().slice(0,10);
+  return s.lastInvestDate !== todayStr;
+}
+
+// Esegue l'investimento del saldo accumulato nell'ETF
+function trExecuteWeeklyInvestment(forced) {
+  const s = trLoadRoundUpSettings();
+  if (!s.enabled) { showToast('⚠ Round Up non attivo'); return; }
+  const pending = parseFloat((s.pendingRoundUp || 0).toFixed(2));
+  if (pending <= 0) { showToast('Nessun saldo Round Up da investire'); return; }
+
+  const etfName = s.etf === 'custom' ? (s.customEtf || 'VWRA.L') : (s.etf || 'VWRA.L');
+  const todayStr = new Date().toISOString().slice(0,10);
+  const todayFmt = new Date().toLocaleDateString('it-IT');
+
+  if (typeof TR !== 'undefined') {
+    // Deduci dalla cassa TR
+    TR.cash.balance = Math.max(0, (TR.cash.balance || 0) - pending);
+
+    // Trova o crea l'holding ETF
+    const normName = etfName.toUpperCase();
+    let hIdx = TR.holdings.findIndex(h => (h.ticker||h.name||'').toUpperCase() === normName || (h.name||'').toUpperCase().includes(normName));
+    const curPrice = hIdx >= 0 ? (TR.holdings[hIdx].currentPrice || 1) : 1;
+    const qty = parseFloat((pending / curPrice).toFixed(6));
+
+    if (hIdx >= 0) {
+      TR.holdings[hIdx].lots = TR.holdings[hIdx].lots || [];
+      TR.holdings[hIdx].lots.push({ qty, buyPrice: curPrice, buyDate: todayStr, note: '🔁 Round Up Settimanale' });
+      const totQ = TR.holdings[hIdx].lots.reduce((a,l) => a + Number(l.qty), 0);
+      TR.holdings[hIdx].qty = totQ;
+    } else {
+      TR.holdings.push({
+        id: Date.now()+1, name: etfName, ticker: etfName, type: 'etf',
+        lots: [{ qty, buyPrice: curPrice, buyDate: todayStr, note: '🔁 Round Up Settimanale' }],
+        currentPrice: curPrice
+      });
+    }
+
+    // Log transazione investimento
+    TR.txns.push({
+      type: 'roundup_invest',
+      desc: '📈 Investimento Round Up → ' + etfName + ' (' + pending.toFixed(2) + '€)',
+      amount: -pending,
+      date: todayFmt
+    });
+    trSaveAll();
+  }
+
+  // Aggiorna le settings: azzera pending, aggiorna totalRounded e lastInvestDate
+  s.totalRounded  = (s.totalRounded || 0) + pending;
+  s.pendingRoundUp = 0;
+  s.lastInvestDate = todayStr;
+
+  // Salva storico investimenti
+  const history = trRuLoad('investHistory', []);
+  history.push({ date: todayFmt, amount: pending, etf: etfName });
+  trRuSave('investHistory', history);
+
+  trRuSave('settings', s);
+  showToast('📈 Investiti ' + pending.toFixed(2) + '€ in ' + etfName + (forced ? ' (manuale)' : ' (martedì)'));
+  renderTrRoundUp();
+  renderTrHero();
+  if (typeof renderAll === 'function') renderAll();
+}
+
+// Controlla automaticamente all'avvio se investire
+function trCheckTuesdayInvestment() {
+  if (trShouldInvestToday()) {
+    trExecuteWeeklyInvestment(false);
+  }
+}
+
+// ── Render Round Up card ──
+function renderTrRoundUp() {
+  const s = trLoadRoundUpSettings();
+  const fmtE = v => v.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
+
+  // Toggle UI
+  const toggle = document.getElementById('trRoundUpToggle');
+  const knob   = document.getElementById('trRoundUpKnob');
+  if (toggle && knob) {
+    toggle.style.background = s.enabled ? 'var(--blue)' : 'var(--surface3)';
+    knob.style.left = s.enabled ? '22px' : '3px';
+  }
+  // Multiplier
+  const mult = document.getElementById('trRoundUpMult');
+  if (mult) mult.value = String(s.multiplier || 1);
+  // ETF
+  const etfSel = document.getElementById('trRoundUpEtf');
+  if (etfSel) etfSel.value = s.etf || 'VWRA.L';
+  // Custom ETF row
+  const customRow = document.getElementById('trRoundUpCustomRow');
+  const customInp = document.getElementById('trRoundUpCustom');
+  if (customRow) customRow.style.display = (s.etf === 'custom') ? 'block' : 'none';
+  if (customInp) customInp.value = s.customEtf || '';
+
+  // Saldo ACCUMULATO (in attesa del martedì)
+  const pending  = s.pendingRoundUp || 0;
+  const invested = s.totalRounded  || 0;
+  const etfName  = s.etf === 'custom' ? (s.customEtf || 'ETF') : (s.etf || 'VWRA.L');
+  const curPrice = (typeof TR !== 'undefined' && TR.holdings)
+    ? (TR.holdings.find(h => (h.ticker||h.name||'').toUpperCase() === etfName.toUpperCase())?.currentPrice || 0)
+    : 0;
+  const units = curPrice > 0 ? (invested / curPrice).toFixed(6) : '—';
+
+  // Elemento saldo pending
+  const elPending = document.getElementById('trRoundUpPending');
+  if (elPending) elPending.textContent = fmtE(pending);
+
+  // Elemento totale investito
+  const el = document.getElementById('trRoundUpTotal');
+  if (el) el.textContent = fmtE(invested);
+
+  const uel = document.getElementById('trRoundUpUnits');
+  if (uel) uel.textContent = curPrice > 0 ? units + ' quote di ' + etfName : 'Aggiorna prezzo di ' + etfName;
+
+  // Prossimo investimento
+  const elNext = document.getElementById('trRoundUpNextDate');
+  if (elNext) {
+    const today = new Date();
+    if (today.getDay() === 2 && pending > 0) {
+      elNext.textContent = 'Oggi (martedì) — investimento in corso';
+      elNext.style.color = 'var(--green)';
+    } else {
+      elNext.textContent = 'Prossimo: ' + trNextTuesdayStr();
+      elNext.style.color = 'var(--text2)';
+    }
+  }
+
+  // Storico investimenti settimanali
+  renderTrInvestHistory();
+}
+
+function renderTrInvestHistory() {
+  const el = document.getElementById('trRoundUpHistory');
+  if (!el) return;
+  const history = trRuLoad('investHistory', []);
+  const fmtE = v => v.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
+  if (!history.length) {
+    el.innerHTML = '<div class="tr-empty" style="font-size:.78rem">Nessun investimento ancora effettuato.</div>';
+    return;
+  }
+  el.innerHTML = [...history].reverse().slice(0, 6).map(h =>
+    `<div class="tr-txn-row">
+      <div class="tr-txn-icon" style="background:var(--green-bg)">📈</div>
+      <div class="tr-txn-info">
+        <div class="tr-txn-desc">${h.etf}</div>
+        <div class="tr-txn-date">${h.date}</div>
+      </div>
+      <div class="tr-txn-amt" style="color:var(--green)">+${fmtE(h.amount)}</div>
+    </div>`
+  ).join('');
+}
+
+function trToggleRoundUp() {
+  const s = trLoadRoundUpSettings();
+  s.enabled = !s.enabled;
+  trRuSave('settings', s);
+  renderTrRoundUp();
+  showToast(s.enabled ? '🔁 Round Up attivato — investimento ogni martedì' : 'Round Up disattivato');
+}
+
+function trSaveRoundUpSettings() {
+  const s = trLoadRoundUpSettings();
+  const mult   = document.getElementById('trRoundUpMult');
+  const etfSel = document.getElementById('trRoundUpEtf');
+  const custom = document.getElementById('trRoundUpCustom');
+  if (mult)   s.multiplier = parseInt(mult.value) || 1;
+  if (etfSel) s.etf = etfSel.value;
+  if (custom) s.customEtf = custom.value.trim();
+  trRuSave('settings', s);
+  const customRow = document.getElementById('trRoundUpCustomRow');
+  if (customRow) customRow.style.display = (s.etf === 'custom') ? 'block' : 'none';
+  renderTrRoundUp();
+}
+
+// ── Expenses ──
+function trLoadExpenses() { return trRuLoad('expenses', []); }
+function trSaveExpenses(exps) { trRuSave('expenses', exps); }
+
+function openTrExpenseSheet() {
+  document.getElementById('trExpDesc').value   = '';
+  document.getElementById('trExpAmount').value = '';
+  document.getElementById('trExpDate').value   = new Date().toISOString().slice(0,10);
+  document.getElementById('trExpRoundUpPreview').style.display = 'none';
+  document.getElementById('trExpenseOverlay').style.display = 'flex';
+}
+
+function trExpPreview() {
+  const amount = parseFloat(document.getElementById('trExpAmount').value) || 0;
+  const s = trLoadRoundUpSettings();
+  const preview = document.getElementById('trExpRoundUpPreview');
+  if (!s.enabled || amount <= 0) { preview.style.display = 'none'; return; }
+  const ceil     = Math.ceil(amount);
+  const roundUp  = parseFloat(((ceil - amount) * s.multiplier).toFixed(2));
+  const etfName  = s.etf === 'custom' ? (s.customEtf || 'ETF') : s.etf;
+  const fmtE = v => v.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
+  if (roundUp > 0) {
+    preview.style.display = 'block';
+    document.getElementById('trExpRoundVal').textContent = fmtE(roundUp) + (s.multiplier > 1 ? ' (' + s.multiplier + '×)' : '');
+    document.getElementById('trExpRoundEtf').textContent = etfName;
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+function saveTrExpense() {
+  const desc   = document.getElementById('trExpDesc').value.trim();
+  const amount = parseFloat(document.getElementById('trExpAmount').value);
+  const date   = document.getElementById('trExpDate').value;
+
+  if (!desc)                      { showToast('⚠ Inserisci una descrizione'); return; }
+  if (isNaN(amount) || amount <= 0) { showToast('⚠ Importo non valido'); return; }
+
+  const s       = trLoadRoundUpSettings();
+  const ceil    = Math.ceil(amount);
+  const diff    = parseFloat((ceil - amount).toFixed(2));
+  const roundUp = parseFloat((diff * (s.multiplier || 1)).toFixed(2));
+  const etfName = s.etf === 'custom' ? (s.customEtf || 'VWRA.L') : (s.etf || 'VWRA.L');
+  const dateStr = date ? new Date(date).toLocaleDateString('it-IT') : new Date().toLocaleDateString('it-IT');
+
+  // Save expense
+  const exps = trLoadExpenses();
+  const exp  = { id: Date.now(), desc, amount, date: dateStr, roundUp: s.enabled ? roundUp : 0, etf: etfName };
+  exps.push(exp);
+  trSaveExpenses(exps);
+
+  // Log in TR txns
+  if (typeof TR !== 'undefined') {
+    TR.txns.push({ type:'expense', desc:'💳 '+desc, amount:-amount, date:dateStr });
+
+    // ── NUOVO: accumula il round up come saldo pending, NON investire subito ──
+    if (s.enabled && roundUp > 0) {
+      s.pendingRoundUp = parseFloat(((s.pendingRoundUp || 0) + roundUp).toFixed(2));
+      trRuSave('settings', s);
+
+      // Deduci subito dalla cassa TR (il denaro è "messo da parte")
+      TR.cash.balance = Math.max(0, (TR.cash.balance || 0) - roundUp);
+
+      // Log: round up messo da parte
+      TR.txns.push({
+        type: 'roundup',
+        desc: '🔁 Round Up accumulato → ' + etfName + ' (' + roundUp.toFixed(2) + '€) — investimento martedì',
+        amount: -roundUp,
+        date: dateStr
+      });
+      trSaveAll();
+    } else {
+      trSave('txns', TR.txns);
+    }
+  }
+
+  // Also log expense in main app history
+  AppState.data.push({
+    desc: '💳 TR: ' + desc,
+    amount: -amount,
+    category: 'Altro',
+    month: getMonth(),
+    method: WALLET_METHODS[0]?.key || 'Conto Corrente',
+    day: new Date().getDate(),
+    transfer: false
+  });
+  if (typeof save === 'function') save();
+
+  closeTrSheet('trExpenseOverlay');
+  showToast('✓ Uscita salvata' + (s.enabled && roundUp > 0 ? ' · Round Up +' + roundUp.toFixed(2) + '€ messo da parte 🔁' : ''));
+  renderTrExpenses();
+  renderTrRoundUp();
+  renderTrHero();
+  if (typeof renderAll === 'function') renderAll();
+}
+
+function renderTrExpenses() {
+  const el = document.getElementById('trExpenseList');
+  if (!el) return;
+  const exps = trLoadExpenses();
+  if (!exps.length) { el.innerHTML = '<div class="tr-empty">Nessuna uscita registrata.</div>'; return; }
+  const fmtE = v => v.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
+  el.innerHTML = [...exps].reverse().slice(0,10).map(e => {
+    const row = document.createElement('div');
+    row.className = 'tr-txn-row';
+    row.innerHTML = '<div class="tr-txn-icon" style="background:var(--red-bg)">💳</div>'
+      + '<div class="tr-txn-info"><div class="tr-txn-desc"></div>'
+      + '<div class="tr-txn-date">' + e.date + (e.roundUp > 0 ? ' · 🔁 +' + fmtE(e.roundUp) : '') + '</div></div>'
+      + '<div class="tr-txn-amt" style="color:var(--red)">−' + fmtE(e.amount) + '</div>';
+    row.querySelector('.tr-txn-desc').textContent = e.desc;
+    return row.outerHTML;
+  }).join('');
+}
+
+// ── Hook into renderTradeRepublic ──
+const _origRenderTR = typeof renderTradeRepublic === 'function' ? renderTradeRepublic : null;
+if (_origRenderTR) {
+  window.renderTradeRepublic = function() {
+    _origRenderTR();
+    renderTrExpenses();
+    renderTrRoundUp();
+    trCheckTuesdayInvestment(); // controlla se è martedì e investire
+  };
+}
+
+// Avvia il check automatico del martedì anche al caricamento iniziale
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(trCheckTuesdayInvestment, 2000);
+});
 
 </script>
 </body>
