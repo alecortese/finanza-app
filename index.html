@@ -4316,6 +4316,21 @@ function debouncedRenderAll() {
     </div>
 
     <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="card-title" style="margin-bottom:0">📈 Trend categorie</div>
+        <div style="display:flex;gap:6px;">
+          <button id="trendBtn3" onclick="setTrendWindow(3)" class="tr-btn-sm tr-btn-blue">3M</button>
+          <button id="trendBtn6" onclick="setTrendWindow(6)" class="tr-btn-sm" style="background:var(--surface3);color:var(--text2);">6M</button>
+        </div>
+      </div>
+      <div style="font-size:.75rem;color:var(--text2);margin-bottom:10px;" id="trendSubtitle"></div>
+      <div id="trendCatFilter" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
+      <canvas id="trendChart"></canvas>
+      <div id="trendLegend" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;"></div>
+      <div id="trendEmpty" style="display:none;text-align:center;padding:24px 0;color:var(--text3);font-size:.85rem;">Nessun dato per il periodo selezionato</div>
+    </div>
+
+    <div class="card">
       <div class="card-title">Andamento annuale</div>
       <canvas id="yearChart"></canvas>
     </div>
@@ -5008,8 +5023,8 @@ function debouncedRenderAll() {
 
 
   <!-- ── TRANSFER SHEET ─────────────────── -->
-  <div id="transferOverlay" class="transfer-sheet-overlay" style="display:none;" onclick="closeTransfer(event)">
-    <div class="transfer-sheet">
+  <div id="transferOverlay" class="transfer-sheet-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center;" onclick="closeTransfer(event)">
+    <div class="transfer-sheet" style="background:var(--surface1);border-radius:22px 22px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;" onclick="event.stopPropagation()">
       <div class="transfer-sheet-title">🔄 Trasferisci fondi</div>
       <div class="transfer-sheet-sub">Sposta soldi da un metodo all'altro. Verrà registrato come uscita dal primo e entrata nel secondo.</div>
 
@@ -5144,7 +5159,13 @@ function monthData(month) {
 }
 
 function totalBalance() {
-  let appBal = AppState.data.reduce((s, i) => s + Number(i.amount), 0);
+  let appBal = AppState.data.reduce((s, i) => {
+    // Escludi spese/entrate TR: già in trCash/trPort
+    if (i.method === '__trade_republic__') return s;
+    // Escludi lato wallet di trasferimenti verso/da TR (l'altro lato è in TR.cash)
+    if (i.transfer && i.desc && i.desc.includes('Trade Republic')) return s;
+    return s + Number(i.amount);
+  }, 0);
   let trCash = (typeof TR !== 'undefined') ? (TR.cash?.balance || 0) : 0;
   let trPort = (typeof TR !== 'undefined') ? (TR.holdings || []).reduce((s, h) => {
     const qty = h.lots ? h.lots.reduce((a,l) => a+Number(l.qty), 0) : (h.qty||0);
@@ -5168,7 +5189,8 @@ function monthSpend(month) {
     if (i.month === month && i.amount < 0
         && i.category !== 'Risparmio'
         && i.category !== 'Trasferimento'
-        && !i.transfer)
+        && !i.transfer
+        && i.method !== '__trade_republic__')
       s += Math.abs(i.amount);
   });
   return s;
@@ -5180,7 +5202,8 @@ function monthIncome(month) {
   AppState.data.forEach(i => {
     if (i.month === month && i.amount > 0
         && i.category !== 'Trasferimento'
-        && !i.transfer)
+        && !i.transfer
+        && i.method !== '__trade_republic__')
       s += i.amount;
   });
   return s;
@@ -5191,7 +5214,8 @@ function catSpend(month, cat) {
   let s = 0;
   AppState.data.forEach(i => {
     if (i.month === month && i.amount < 0 && i.category === cat
-        && !i.transfer)
+        && !i.transfer
+        && i.method !== '__trade_republic__')
       s += Math.abs(i.amount);
   });
   return s;
@@ -5366,10 +5390,6 @@ function addTxn(isIncome) {
       showToast('✅ Entrata TR salvata');
     }
 
-    // Registra anche in AppState per statistiche globali (marcata come TR)
-    AppState.data.push({ desc: (isIncome ? '💚 TR: ' : '💳 TR: ') + d, amount: isIncome ? a : -a, category: cat, month: m, method: '__trade_republic__', day });
-    save();
-
   } else {
     // ── Spesa/entrata normale ──
     AppState.data.push({ desc: d, amount: isIncome ? a : -a, category: cat, month: m, method: meth, day });
@@ -5391,23 +5411,186 @@ function addTxn(isIncome) {
 
   renderAll();
   if (isTR) { renderTrExpenses(); renderTrRoundUp(); renderTrHero(); }
+
+  // Redirect automatico alla home
+  if (typeof _currentTab !== 'undefined' && _currentTab !== 'home') {
+    setTimeout(() => showTab('home', null), 300);
+  }
 }
 
 /* ── DELETE ─────────────────────────────── */
 function deleteItem(index) {
   lastDeleted = AppState.data[index];
   lastIndex = index;
+  const item = lastDeleted;
   AppState.data.splice(index, 1);
   save();
+
+  // Se è un trasferimento verso/da TR, aggiusta TR.cash
+  if (item && item.transfer && item.desc && item.desc.includes('Trade Republic') && typeof TR !== 'undefined') {
+    const amt = Math.abs(item.amount);
+    if (item.amount < 0) {
+      // Era uscita da wallet verso TR → ripristina wallet (già fatto da splice), togli da TR.cash
+      TR.cash.balance = Math.max(0, (TR.cash.balance || 0) - amt);
+      TR.txns = TR.txns.filter(t => !(t.type === 'deposit' && Math.abs(t.amount - amt) < 0.01));
+    } else {
+      // Era entrata da TR verso wallet → rimetti in TR.cash
+      TR.cash.balance = (TR.cash.balance || 0) + amt;
+      TR.txns = TR.txns.filter(t => !(t.type === 'withdrawal' && Math.abs(Math.abs(t.amount) - amt) < 0.01));
+    }
+    trSaveAll();
+    if (typeof renderTrHero === 'function') renderTrHero();
+  }
+
+  // Se la transazione è di Trade Republic, sincronizza TR
+  if (item && item.method === '__trade_republic__' && typeof TR !== 'undefined') {
+    const amt = Math.abs(item.amount);
+    const isExpense = item.amount < 0;
+
+    if (isExpense) {
+      // Cerca la spesa nella lista TR expenses per recuperare il round up PRIMA di eliminare
+      const exps = (typeof trLoadExpenses === 'function') ? trLoadExpenses() : [];
+      const descClean = item.desc.replace(/^💳 TR: /, '');
+      const expIdx = exps.findIndex(e => e.desc === descClean && Math.abs(e.amount - amt) < 0.01);
+      const ruAmt = expIdx >= 0 ? (exps[expIdx].roundUp || 0) : 0;
+      const etfName = expIdx >= 0 ? (exps[expIdx].etf || '') : '';
+
+      // Salva sul lastDeleted per poter fare undo completo
+      lastDeleted._trRoundUp = ruAmt;
+      lastDeleted._trEtf = etfName;
+
+      // Ripristina il cash TR (spesa + round up)
+      TR.cash.balance = (TR.cash.balance || 0) + amt + ruAmt;
+
+      // Riduci il pending round up
+      if (ruAmt > 0) {
+        const s = (typeof trLoadRoundUpSettings === 'function') ? trLoadRoundUpSettings() : null;
+        if (s) {
+          s.pendingRoundUp = Math.max(0, parseFloat(((s.pendingRoundUp || 0) - ruAmt).toFixed(2)));
+          trRuSave('settings', s);
+        }
+      }
+
+      // Elimina dalla lista TR expenses
+      if (expIdx >= 0) {
+        exps.splice(expIdx, 1);
+        if (typeof trSaveExpenses === 'function') trSaveExpenses(exps);
+      }
+
+      // Rimuovi log TR txns (spesa + eventuale round up)
+      TR.txns = TR.txns.filter(t =>
+        !(t.type === 'expense' && Math.abs(Math.abs(t.amount) - amt) < 0.01 && t.desc.includes(descClean))
+        && !(t.type === 'roundup' && t.desc.includes(descClean))
+      );
+
+    } else {
+      // Entrata: scala il cash
+      TR.cash.balance = Math.max(0, (TR.cash.balance || 0) - amt);
+      TR.txns = TR.txns.filter(t => !(t.type === 'income' && Math.abs(t.amount - amt) < 0.01));
+    }
+    trSaveAll();
+    if (typeof renderTrExpenses === 'function') renderTrExpenses();
+    if (typeof renderTrRoundUp === 'function') renderTrRoundUp();
+    if (typeof renderTrHero === 'function') renderTrHero();
+  }
+
   showUndo();
+}
+
+// Elimina una transazione Trade Republic dallo storico principale
+function deleteTRTxn(trIdx) {
+  if (typeof TR === 'undefined') return;
+  const txn = TR.txns[trIdx];
+  if (!txn) return;
+
+  const amt    = Math.abs(txn.amount);
+  const isExp  = txn.amount < 0;
+  const desc   = txn.desc || '';
+
+  // Ripristina TR.cash
+  if (isExp) {
+    TR.cash.balance = (TR.cash.balance || 0) + amt;
+
+    // Cerca round up associato (riga roundup subito dopo)
+    const nextTxn = TR.txns[trIdx + 1];
+    let ruAmt = 0;
+    let ruIdx = -1;
+    if (nextTxn && nextTxn.type === 'roundup') {
+      ruAmt = Math.abs(nextTxn.amount);
+      ruIdx = trIdx + 1;
+      TR.cash.balance = (TR.cash.balance || 0) + ruAmt;
+      // Riduci il pending
+      const s = (typeof trLoadRoundUpSettings === 'function') ? trLoadRoundUpSettings() : null;
+      if (s) {
+        s.pendingRoundUp = Math.max(0, parseFloat(((s.pendingRoundUp || 0) - ruAmt).toFixed(2)));
+        trRuSave('settings', s);
+      }
+    }
+
+    // Rimuovi riga round up (prima, così l'indice non si sposta)
+    if (ruIdx >= 0) TR.txns.splice(ruIdx, 1);
+    // Rimuovi la spesa
+    TR.txns.splice(trIdx, 1);
+
+    // Rimuovi anche dalla lista tr_ru_expenses
+    if (typeof trLoadExpenses === 'function') {
+      const descClean = desc.replace(/^💳 /, '');
+      const exps = trLoadExpenses();
+      const expIdx = exps.findIndex(e => e.desc === descClean && Math.abs(e.amount - amt) < 0.01);
+      if (expIdx >= 0) { exps.splice(expIdx, 1); trSaveExpenses(exps); }
+    }
+
+  } else {
+    TR.cash.balance = Math.max(0, (TR.cash.balance || 0) - amt);
+    TR.txns.splice(trIdx, 1);
+  }
+
+  trSaveAll();
+  renderHistory();
+  if (typeof renderTrExpenses === 'function') renderTrExpenses();
+  if (typeof renderTrRoundUp   === 'function') renderTrRoundUp();
+  if (typeof renderTrHero      === 'function') renderTrHero();
+  if (typeof renderAll         === 'function') renderAll();
+  showToast('🗑 Transazione TR eliminata');
 }
 
 function undoDelete() {
   if (lastDeleted !== null) {
-    AppState.data.splice(lastIndex, 0, lastDeleted);
+    const item = lastDeleted;
+    AppState.data.splice(lastIndex, 0, item);
     lastDeleted = null;
     lastIndex = null;
     save();
+
+    // Se era TR, ripristina anche lì
+    if (item && item.method === '__trade_republic__' && typeof TR !== 'undefined') {
+      const amt = Math.abs(item.amount);
+      const isExpense = item.amount < 0;
+      if (isExpense) {
+        TR.cash.balance = Math.max(0, (TR.cash.balance || 0) - amt);
+        // Ripristina round up nel pending se salvato
+        const ruAmt = item._trRoundUp || 0;
+        if (ruAmt > 0) {
+          TR.cash.balance = Math.max(0, (TR.cash.balance || 0) - ruAmt);
+          const s = (typeof trLoadRoundUpSettings === 'function') ? trLoadRoundUpSettings() : null;
+          if (s) {
+            s.pendingRoundUp = parseFloat(((s.pendingRoundUp || 0) + ruAmt).toFixed(2));
+            trRuSave('settings', s);
+          }
+        }
+        // Riaggiunge la spesa alla lista TR
+        const descClean = item.desc.replace(/^💳 TR: /, '');
+        const exps = (typeof trLoadExpenses === 'function') ? trLoadExpenses() : [];
+        exps.push({ id: Date.now(), desc: descClean, amount: amt, date: new Date().toLocaleDateString('it-IT'), roundUp: ruAmt, etf: item._trEtf || '' });
+        if (typeof trSaveExpenses === 'function') trSaveExpenses(exps);
+      } else {
+        TR.cash.balance = (TR.cash.balance || 0) + amt;
+      }
+      trSaveAll();
+      if (typeof renderTrExpenses === 'function') renderTrExpenses();
+      if (typeof renderTrRoundUp === 'function') renderTrRoundUp();
+      if (typeof renderTrHero === 'function') renderTrHero();
+    }
   }
 }
 
@@ -5689,21 +5872,54 @@ function renderHistory() {
   // Build filter bar (updates chips UI)
   buildFilterBar();
 
+  // Transazioni normali
   let items = AppState.data
     .map((item, index) => ({ ...item, index }))
     .filter(i => {
       if (i.month !== month) return false;
-      // Text search
+      if (i.method === '__trade_republic__') return false; // già mostrate sotto
       if (q && !i.desc.toLowerCase().includes(q) && !(i.category||'').toLowerCase().includes(q)) return false;
-      // Type filter
       if (_filterType === 'income'  && i.amount <= 0) return false;
       if (_filterType === 'expense' && i.amount >= 0) return false;
-      // Category filter
       if (_filterCats.size && !_filterCats.has(i.category)) return false;
-      // Method filter
       if (_filterMethods.size && !_filterMethods.has(i.method)) return false;
       return true;
     });
+
+  // Aggiungi transazioni TR da TR.txns
+  if (typeof TR !== 'undefined' && TR.txns) {
+    const trMonthItems = TR.txns
+      .map((t, idx) => ({ ...t, index: idx, _isTR: true }))
+      .filter(t => {
+        if (t.type === 'roundup' || t.type === 'roundup_invest') return false; // skip interni
+        // Filtra per mese: TR.txns usa date localizzate (es. "01/06/2026"), tentiamo match
+        const curMonthLabel = month; // es. "Giugno 2025"
+        if (t.date) {
+          const parts = t.date.split('/');
+          if (parts.length === 3) {
+            const d = new Date(parts[2], parts[1]-1, parts[0]);
+            const label = d.toLocaleString('it-IT',{month:'long'}) + ' ' + d.getFullYear();
+            if (label.toLowerCase() !== curMonthLabel.toLowerCase()) return false;
+          }
+        }
+        if (q && !(t.desc||'').toLowerCase().includes(q)) return false;
+        if (_filterType === 'income'  && t.amount <= 0) return false;
+        if (_filterType === 'expense' && t.amount >= 0) return false;
+        if (_filterMethods.size && !_filterMethods.has('__trade_republic__')) return false;
+        return true;
+      })
+      .map(t => ({
+        desc: t.desc,
+        amount: t.amount,
+        category: t.type === 'income' ? 'Entrata' : 'Spese',
+        method: '__trade_republic__',
+        day: t.date ? parseInt(t.date.split('/')[0]) : 0,
+        month,
+        index: t.index,
+        _isTR: true
+      }));
+    items = [...items, ...trMonthItems];
+  }
 
   // Sort
   items.sort((a, b) => {
@@ -5733,18 +5949,25 @@ function renderHistory() {
     let catCls = getCatClass(item.category);
     let sign = item.amount > 0 ? '+' : '';
 
+    const methodLabel = item.method === '__trade_republic__' ? '📱 TR' : (item.method || '');
+    const deleteAction = item._isTR
+      ? `deleteTRTxn(${item.index})`
+      : `deleteItem(${item.index})`;
+    const editAction = item._isTR ? '' :
+      `<button class="pc-edit" onclick="event.stopPropagation();openEditSheet(${item.index})" title="Modifica">✏️</button>`;
+
     wrap.innerHTML = `
       <div class="del-hint">🗑 Elimina</div>
       <div class="txn">
         <div class="txn-icon ${catCls}">${icon}</div>
         <div class="txn-info">
           <div class="txn-desc"></div>
-          <div class="txn-meta">${item.day || ''} ${item.month} · ${item.category} · ${item.method||''}</div>
+          <div class="txn-meta">${item.day || ''} ${item.month} · ${item.category} · ${methodLabel}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
           <div class="txn-amount" style="color:${amtColor}">${sign}${cur(Math.abs(item.amount), 2)}</div>
-          <button class="pc-edit" onclick="event.stopPropagation();openEditSheet(${item.index})" title="Modifica">✏️</button>
-          <button class="pc-del"  onclick="event.stopPropagation();deleteItem(${item.index})">✕</button>
+          ${editAction}
+          <button class="pc-del" onclick="event.stopPropagation();${deleteAction}">✕</button>
         </div>
       </div>`;
 
@@ -5780,7 +6003,7 @@ function renderHistory() {
       el.style.transition = 'transform .25s ease';
       if (curX < -90) {
         el.style.transform = 'translateX(-110%)';
-        setTimeout(() => deleteItem(item.index), 220);
+        setTimeout(() => item._isTR ? deleteTRTxn(item.index) : deleteItem(item.index), 220);
       } else {
         el.style.transform = 'translateX(0)';
         hint.style.opacity = 0;
@@ -5806,8 +6029,174 @@ function renderAddSummary(inc, out) {
 }
 
 /* ── CHARTS ─────────────────────────────── */
+// ── Trend chart state ──
+let _trendWindow = 3;
+let _trendActiveCats = new Set();
+let _trendChart = null;
+
+function setTrendWindow(n) {
+  _trendWindow = n;
+  document.getElementById('trendBtn3')?.classList.toggle('tr-btn-blue', n === 3);
+  document.getElementById('trendBtn6')?.classList.toggle('tr-btn-blue', n === 6);
+  document.getElementById('trendBtn3')?.style.setProperty('background', n === 3 ? '' : 'var(--surface3)');
+  document.getElementById('trendBtn6')?.style.setProperty('background', n === 6 ? '' : 'var(--surface3)');
+  renderTrendChart();
+}
+
+function renderTrendChart() {
+  const TREND_COLORS = ['#3b82f6','#ef4444','#22c55e','#f97316','#a855f7','#06b6d4','#eab308','#ec4899','#14b8a6','#6366f1'];
+  const currentIdx = MONTHS.indexOf(getMonth());
+  const windowMonths = [];
+  for (let i = _trendWindow - 1; i >= 0; i--) {
+    let idx = currentIdx - i;
+    if (idx < 0) idx += 12;
+    windowMonths.push(MONTHS[idx]);
+  }
+
+  // Collect categories
+  const catTotals = {};
+  AppState.data.forEach(i => {
+    if (!windowMonths.includes(i.month)) return;
+    if (i.amount >= 0 || i.transfer || i.category === 'Trasferimento' || i.category === 'Risparmio' || i.method === '__trade_republic__') return;
+    catTotals[i.category] = (catTotals[i.category] || 0) + Math.abs(i.amount);
+  });
+  const allCats = Object.keys(catTotals).sort((a, b) => catTotals[b] - catTotals[a]);
+
+  if (_trendActiveCats.size === 0 || ![..._trendActiveCats].some(c => allCats.includes(c))) {
+    _trendActiveCats = new Set(allCats.slice(0, 6));
+  }
+
+  // Subtitle
+  const subEl = document.getElementById('trendSubtitle');
+  if (subEl) subEl.textContent = windowMonths[0] + ' — ' + windowMonths[windowMonths.length - 1];
+
+  const canvas = document.getElementById('trendChart');
+  const emptyEl = document.getElementById('trendEmpty');
+  const legendEl = document.getElementById('trendLegend');
+  if (!canvas) return;
+
+  const activeCats = allCats.filter(c => _trendActiveCats.has(c));
+
+  // Build filter chips
+  const filterEl = document.getElementById('trendCatFilter');
+  if (filterEl) {
+    filterEl.innerHTML = '';
+    allCats.forEach((cat, ci) => {
+      const color = TREND_COLORS[ci % TREND_COLORS.length];
+      const active = _trendActiveCats.has(cat);
+      const chip = document.createElement('button');
+      const icon = getCatIcon ? getCatIcon(cat) : '';
+      chip.innerHTML = `<span style="margin-right:4px">${icon}</span>${cat}`;
+      chip.style.cssText = `font-size:.72rem;font-weight:700;padding:4px 11px;border-radius:20px;border:2px solid ${color};background:${active ? color+'28' : 'transparent'};color:${active ? color : 'var(--text3)'};cursor:pointer;transition:all .18s;display:inline-flex;align-items:center;`;
+      chip.onclick = () => {
+        if (_trendActiveCats.has(cat)) _trendActiveCats.delete(cat);
+        else _trendActiveCats.add(cat);
+        renderTrendChart();
+      };
+      filterEl.appendChild(chip);
+    });
+  }
+
+  if (!activeCats.length || !allCats.length) {
+    canvas.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = '';
+    if (legendEl) legendEl.innerHTML = '';
+    return;
+  }
+  canvas.style.display = '';
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  if (_trendChart) { _trendChart.destroy(); _trendChart = null; }
+
+  const datasets = activeCats.map((cat) => {
+    const ci = allCats.indexOf(cat);
+    const color = TREND_COLORS[ci % TREND_COLORS.length];
+    const data = windowMonths.map(m => {
+      let s = 0;
+      AppState.data.forEach(i => {
+        if (i.month === m && i.category === cat && i.amount < 0 && !i.transfer && i.method !== '__trade_republic__') s += Math.abs(i.amount);
+      });
+      return parseFloat(s.toFixed(2));
+    });
+    return {
+      label: cat, data,
+      borderColor: color,
+      backgroundColor: (ctx) => {
+        const chart = ctx.chart;
+        const {ctx: c, chartArea} = chart;
+        if (!chartArea) return color + '20';
+        const grad = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        grad.addColorStop(0, color + '55');
+        grad.addColorStop(1, color + '05');
+        return grad;
+      },
+      borderWidth: 2.5, tension: 0.4, fill: true,
+      pointRadius: 5, pointHoverRadius: 8,
+      pointBackgroundColor: color, pointBorderColor: '#fff', pointBorderWidth: 2,
+      spanGaps: true
+    };
+  });
+
+  _trendChart = new Chart(canvas, {
+    type: 'line',
+    data: { labels: windowMonths.map(m => m.slice(0, 3)), datasets },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(15,15,25,0.92)',
+          titleColor: '#fff',
+          titleFont: { size: 13, weight: '800' },
+          bodyColor: 'rgba(255,255,255,0.85)',
+          bodyFont: { size: 12 },
+          padding: 14,
+          cornerRadius: 12,
+          boxPadding: 6,
+          callbacks: {
+            title: items => items[0]?.label || '',
+            label: ctx => {
+              const v = ctx.parsed.y;
+              return '  ' + ctx.dataset.label + ': ' + (v != null ? v.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' €' : '0,00 €');
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(150,150,150,0.07)', drawBorder: false },
+          ticks: { callback: v => v + ' €', font: { size: 11 }, color: 'rgba(150,150,150,0.8)' },
+          border: { display: false }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 12, weight: '700' }, color: 'rgba(150,150,150,0.9)' },
+          border: { display: false }
+        }
+      }
+    }
+  });
+
+  // Legenda inline sotto il grafico
+  if (legendEl) {
+    legendEl.innerHTML = '';
+    activeCats.forEach((cat) => {
+      const ci = allCats.indexOf(cat);
+      const color = TREND_COLORS[ci % TREND_COLORS.length];
+      const icon = getCatIcon ? getCatIcon(cat) : '';
+      const item = document.createElement('div');
+      item.style.cssText = 'display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:700;color:var(--text2);';
+      item.innerHTML = `<span style="display:inline-block;width:22px;height:4px;border-radius:4px;background:${color}"></span><span>${icon} ${cat}</span>`;
+      legendEl.appendChild(item);
+    });
+  }
+}
+
 function renderCharts(month) {
   renderCatChart(month);
+  renderTrendChart();
   renderYearChart();
   renderMethodChart(month);
 }
@@ -5815,7 +6204,7 @@ function renderCharts(month) {
 function renderCatChart(month) {
   let cat = {};
   AppState.data.forEach(i => {
-    if (i.month === month && i.amount < 0 && !i.transfer && i.category !== 'Trasferimento') {
+    if (i.month === month && i.amount < 0 && !i.transfer && i.category !== 'Trasferimento' && i.method !== '__trade_republic__') {
       let k = i.category || 'Altro';
       cat[k] = (cat[k] || 0) + Math.abs(i.amount);
     }
@@ -5850,7 +6239,7 @@ function renderYearChart() {
   let data = MONTHS.map(m => {
     let r = { inc: 0, out: 0 };
     AppState.data.forEach(i => {
-      if (i.month !== m || i.transfer || i.category === 'Trasferimento') return;
+      if (i.month !== m || i.transfer || i.category === 'Trasferimento' || i.method === '__trade_republic__') return;
       i.amount >= 0 ? r.inc += i.amount : r.out += Math.abs(i.amount);
     });
     return { ...r, profit: r.inc - r.out };
@@ -9996,7 +10385,13 @@ function trOpenDetail(idx) {
     };
   }
   window.totalBalance = function() {
-    let appBal = AppState.data.reduce((s,i)=>s+Number(i.amount),0);
+    let appBal = AppState.data.reduce((s,i)=>{
+      // Escludi transazioni TR: già conteggiate in trCash/trPort
+      if (i.method === '__trade_republic__') return s;
+      // Escludi lato wallet di trasferimenti verso/da TR
+      if (i.transfer && i.desc && i.desc.includes('Trade Republic')) return s;
+      return s + Number(i.amount);
+    }, 0);
     const trCash = TR?.cash?.balance||0;
     const trPort = (TR?.holdings||[]).reduce((s,h)=>{
       const q = h.lots ? h.lots.reduce((a,l)=>a+Number(l.qty),0) : (h.qty||0);
