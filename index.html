@@ -4245,6 +4245,10 @@ function debouncedRenderAll() {
 
   <!-- ── ADD ──────────────────────────── -->
   <div id="tab-add" class="tab">
+    <div class="card">
+      <div class="card-title">🔁 Transazioni ricorrenti</div>
+      <div id="recurringList"></div>
+    </div>
 
     <div class="card">
       <div class="card-title">Nuova transazione</div>
@@ -4291,6 +4295,32 @@ function debouncedRenderAll() {
           <option>Abbonamento Treno</option>
           <option>Altro abbonamento</option>
         </select>
+      </div>
+
+      <!-- Toggle ricorrente -->
+      <div style="margin:14px 0 4px;">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;" onclick="toggleRecurringForm()">
+          <div id="recurringToggle" style="width:42px;height:24px;border-radius:12px;background:var(--surface3);position:relative;flex-shrink:0;transition:background .2s;">
+            <div id="recurringKnob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.2);"></div>
+          </div>
+          <span style="font-size:.82rem;font-weight:700;color:var(--text2);">🔁 Rendi ricorrente</span>
+        </label>
+      </div>
+      <div id="recurringFormExtra" style="display:none;background:var(--surface2);border-radius:12px;padding:12px;margin-bottom:12px;border:1px solid var(--border);">
+        <div class="form-row">
+          <div>
+            <label class="form-label">Tipo</label>
+            <select id="recurringType" class="form-input">
+              <option value="expense">Uscita</option>
+              <option value="income">Entrata</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Giorno del mese</label>
+            <input id="recurringDay" class="form-input" type="number" inputmode="numeric" placeholder="es. 1" min="1" max="31">
+          </div>
+        </div>
+        <button onclick="addRecurring()" class="btn" style="width:100%;margin-top:8px;background:var(--blue);color:#fff;border:none;">💾 Salva come ricorrente</button>
       </div>
 
       <div class="btn-row">
@@ -5306,6 +5336,133 @@ function onMethodChange() {
   }
 }
 
+
+// ═══════════════════════════════════════════════════════
+// TRANSAZIONI RICORRENTI
+// ═══════════════════════════════════════════════════════
+
+function recurringKey() { return accKey(_activeAccId, 'recurring'); }
+
+function loadRecurring() {
+  try { return JSON.parse(localStorage.getItem(recurringKey()) || '[]'); } catch(e) { return []; }
+}
+
+function saveRecurring(list) {
+  localStorage.setItem(recurringKey(), JSON.stringify(list));
+  saveAccountFieldToFirebase('recurring', list);
+}
+
+// Controlla e applica le ricorrenti al caricamento dell'app
+function checkRecurringTransactions() {
+  const list = loadRecurring();
+  if (!list.length) return;
+  const now   = new Date();
+  const today = now.getDate();
+  const curMonth = MONTHS[now.getMonth()] + ' ' + now.getFullYear();
+  let applied = 0;
+
+  list.forEach(r => {
+    if (!r.active) return;
+    if (r.day !== today) return;
+    // Controlla se già applicata questo mese
+    const alreadyDone = AppState.data.some(i =>
+      i.recurringId === r.id && i.month === curMonth
+    );
+    if (alreadyDone) return;
+
+    // Applica
+    AppState.data.push({
+      desc: r.desc,
+      amount: r.isIncome ? r.amount : -r.amount,
+      category: r.category,
+      month: curMonth,
+      method: r.method,
+      day: today,
+      recurringId: r.id,
+      recurring: true
+    });
+    applied++;
+  });
+
+  if (applied > 0) {
+    save();
+    showToast('🔁 ' + applied + ' transazion' + (applied > 1 ? 'i ricorrenti applicate' : 'e ricorrente applicata'));
+  }
+}
+
+function toggleRecurringForm() {
+  const extra  = document.getElementById('recurringFormExtra');
+  const toggle = document.getElementById('recurringToggle');
+  const knob   = document.getElementById('recurringKnob');
+  const open   = extra.style.display === 'none';
+  extra.style.display  = open ? '' : 'none';
+  toggle.style.background = open ? 'var(--blue)' : 'var(--surface3)';
+  knob.style.left = open ? '21px' : '3px';
+}
+
+function addRecurring() {
+  const d    = document.getElementById('desc').value.trim();
+  const a    = parseFloat(document.getElementById('amount').value);
+  const cat  = document.getElementById('category').value;
+  const meth = document.getElementById('method').value;
+  const day  = parseInt(document.getElementById('recurringDay').value);
+  const isIncome = document.getElementById('recurringType').value === 'income';
+
+  if (!d || isNaN(a) || a <= 0) { showToast('⚠️ Inserisci descrizione e importo'); return; }
+  if (!cat)  { showToast('⚠️ Scegli una categoria'); return; }
+  if (!meth) { showToast('⚠️ Scegli un metodo'); return; }
+  if (!day || day < 1 || day > 31) { showToast('⚠️ Giorno non valido (1-31)'); return; }
+
+  const list = loadRecurring();
+  list.push({ id: Date.now(), desc: d, amount: a, category: cat, method: meth, day, isIncome, active: true, created: new Date().toLocaleDateString('it-IT') });
+  saveRecurring(list);
+
+  document.getElementById('addOverlay').style.display = 'none';
+  showToast('✅ Ricorrente salvata — ogni mese il giorno ' + day);
+  renderRecurringList();
+}
+
+function toggleRecurring(id) {
+  const list = loadRecurring();
+  const r = list.find(r => r.id === id);
+  if (r) { r.active = !r.active; saveRecurring(list); renderRecurringList(); }
+}
+
+function deleteRecurring(id) {
+  const list = loadRecurring().filter(r => r.id !== id);
+  saveRecurring(list);
+  renderRecurringList();
+  showToast('🗑 Ricorrente eliminata');
+}
+
+function renderRecurringList() {
+  const el = document.getElementById('recurringList');
+  if (!el) return;
+  const list = loadRecurring();
+  const fmtE = v => v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  if (!list.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3);font-size:.85rem;">Nessuna transazione ricorrente</div>';
+    return;
+  }
+  el.innerHTML = list.map(r => `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:800;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.desc}</div>
+        <div style="font-size:.75rem;color:var(--text2);margin-top:2px;">
+          Ogni mese il <strong>giorno ${r.day}</strong> · ${r.category} · ${r.method === '__trade_republic__' ? '📱 TR' : r.method}
+        </div>
+      </div>
+      <div style="font-weight:900;font-size:.95rem;color:${r.isIncome ? 'var(--green)' : 'var(--red)'};white-space:nowrap;">
+        ${r.isIncome ? '+' : '−'}${fmtE(r.amount)}
+      </div>
+      <button onclick="toggleRecurring(${r.id})" style="background:${r.active ? 'var(--green-bg)' : 'var(--surface3)'};border:none;border-radius:20px;padding:4px 10px;font-size:.72rem;font-weight:800;color:${r.active ? 'var(--green)' : 'var(--text3)'};cursor:pointer;">
+        ${r.active ? 'Attiva' : 'Pausa'}
+      </button>
+      <button onclick="deleteRecurring(${r.id})" style="background:var(--red-bg);border:none;border-radius:10px;padding:6px 8px;font-size:.8rem;cursor:pointer;color:var(--red);">✕</button>
+    </div>
+  `).join('');
+}
+
 function addTxn(isIncome) {
   let d   = document.getElementById("desc").value.trim();
   let a   = parseFloat(document.getElementById("amount").value);
@@ -5643,6 +5800,7 @@ function showAccountUndo(acc) {
    RENDER ALL
 ════════════════════════════════════════ */
 function renderAll() {
+  if (typeof renderRecurringList === 'function') renderRecurringList();
   let month = getMonth();
   let { inc, out, savings } = monthData(month);
   let total = totalBalance();
@@ -10686,6 +10844,7 @@ if (_origRenderTR) {
 
 // Avvia il check automatico del martedì anche al caricamento iniziale
 document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(checkRecurringTransactions, 1500);
   setTimeout(trCheckTuesdayInvestment, 2000);
 });
 
