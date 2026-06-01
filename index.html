@@ -4316,17 +4316,14 @@ function debouncedRenderAll() {
     </div>
 
     <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <div class="card-title" style="margin-bottom:0">📈 Trend categorie</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div class="card-title" style="margin-bottom:0">Trend spese per categoria</div>
         <div style="display:flex;gap:6px;">
           <button id="trendBtn3" onclick="setTrendWindow(3)" class="tr-btn-sm tr-btn-blue">3M</button>
           <button id="trendBtn6" onclick="setTrendWindow(6)" class="tr-btn-sm" style="background:var(--surface3);color:var(--text2);">6M</button>
         </div>
       </div>
-      <div style="font-size:.75rem;color:var(--text2);margin-bottom:10px;" id="trendSubtitle"></div>
-      <div id="trendCatFilter" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
       <canvas id="trendChart"></canvas>
-      <div id="trendLegend" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;"></div>
       <div id="trendEmpty" style="display:none;text-align:center;padding:24px 0;color:var(--text3);font-size:.85rem;">Nessun dato per il periodo selezionato</div>
     </div>
 
@@ -5151,6 +5148,7 @@ function monthData(month) {
   AppState.data.forEach(i => {
     if (i.month !== month) return;
     if (i.transfer || i.category === 'Trasferimento') return; // escludi trasferimenti
+    if (i.method === '__trade_republic__') return; // escludi TR (conteggiato separatamente)
     if (i.amount >= 0) { inc += Number(i.amount); }
     else if (i.category === 'Risparmio') { savings += Math.abs(i.amount); }
     else { out += Math.abs(i.amount); }
@@ -5159,13 +5157,14 @@ function monthData(month) {
 }
 
 function totalBalance() {
-  let appBal = AppState.data.reduce((s, i) => {
-    // Escludi spese/entrate TR: già in trCash/trPort
-    if (i.method === '__trade_republic__') return s;
-    // Escludi lato wallet di trasferimenti verso/da TR (l'altro lato è in TR.cash)
-    if (i.transfer && i.desc && i.desc.includes('Trade Republic')) return s;
-    return s + Number(i.amount);
-  }, 0);
+  // "Quanto ho accumulato da quando uso l'app?"
+  // = tutte le entrate - tutte le uscite (no trasferimenti, no TR) + TR.cash + TR.portfolio
+  let appBal = 0;
+  AppState.data.forEach(i => {
+    if (i.transfer || i.category === 'Trasferimento') return;
+    if (i.method === '__trade_republic__') return;
+    appBal += Number(i.amount);
+  });
   let trCash = (typeof TR !== 'undefined') ? (TR.cash?.balance || 0) : 0;
   let trPort = (typeof TR !== 'undefined') ? (TR.holdings || []).reduce((s, h) => {
     const qty = h.lots ? h.lots.reduce((a,l) => a+Number(l.qty), 0) : (h.qty||0);
@@ -6062,49 +6061,19 @@ function renderTrendChart() {
   });
   const allCats = Object.keys(catTotals).sort((a, b) => catTotals[b] - catTotals[a]);
 
-  if (_trendActiveCats.size === 0 || ![..._trendActiveCats].some(c => allCats.includes(c))) {
-    _trendActiveCats = new Set(allCats.slice(0, 6));
-  }
-
-  // Subtitle
-  const subEl = document.getElementById('trendSubtitle');
-  if (subEl) subEl.textContent = windowMonths[0] + ' — ' + windowMonths[windowMonths.length - 1];
-
   const canvas = document.getElementById('trendChart');
   const emptyEl = document.getElementById('trendEmpty');
-  const legendEl = document.getElementById('trendLegend');
   if (!canvas) return;
 
-  const activeCats = allCats.filter(c => _trendActiveCats.has(c));
-
-  // Build filter chips
-  const filterEl = document.getElementById('trendCatFilter');
-  if (filterEl) {
-    filterEl.innerHTML = '';
-    allCats.forEach((cat, ci) => {
-      const color = TREND_COLORS[ci % TREND_COLORS.length];
-      const active = _trendActiveCats.has(cat);
-      const chip = document.createElement('button');
-      const icon = getCatIcon ? getCatIcon(cat) : '';
-      chip.innerHTML = `<span style="margin-right:4px">${icon}</span>${cat}`;
-      chip.style.cssText = `font-size:.72rem;font-weight:700;padding:4px 11px;border-radius:20px;border:2px solid ${color};background:${active ? color+'28' : 'transparent'};color:${active ? color : 'var(--text3)'};cursor:pointer;transition:all .18s;display:inline-flex;align-items:center;`;
-      chip.onclick = () => {
-        if (_trendActiveCats.has(cat)) _trendActiveCats.delete(cat);
-        else _trendActiveCats.add(cat);
-        renderTrendChart();
-      };
-      filterEl.appendChild(chip);
-    });
-  }
-
-  if (!activeCats.length || !allCats.length) {
+  if (!allCats.length) {
     canvas.style.display = 'none';
     if (emptyEl) emptyEl.style.display = '';
-    if (legendEl) legendEl.innerHTML = '';
     return;
   }
   canvas.style.display = '';
   if (emptyEl) emptyEl.style.display = 'none';
+
+  const activeCats = allCats.slice(0, 8);
 
   if (_trendChart) { _trendChart.destroy(); _trendChart = null; }
 
@@ -6120,19 +6089,9 @@ function renderTrendChart() {
     });
     return {
       label: cat, data,
-      borderColor: color,
-      backgroundColor: (ctx) => {
-        const chart = ctx.chart;
-        const {ctx: c, chartArea} = chart;
-        if (!chartArea) return color + '20';
-        const grad = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-        grad.addColorStop(0, color + '55');
-        grad.addColorStop(1, color + '05');
-        return grad;
-      },
-      borderWidth: 2.5, tension: 0.4, fill: true,
-      pointRadius: 5, pointHoverRadius: 8,
-      pointBackgroundColor: color, pointBorderColor: '#fff', pointBorderWidth: 2,
+      borderColor: color, backgroundColor: color + '22',
+      borderWidth: 2.5, tension: 0.35, fill: false,
+      pointRadius: 4, pointHoverRadius: 6,
       spanGaps: true
     };
   });
@@ -6144,54 +6103,20 @@ function renderTrendChart() {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: false },
+        legend: { position: 'bottom' },
         tooltip: {
-          backgroundColor: 'rgba(15,15,25,0.92)',
-          titleColor: '#fff',
-          titleFont: { size: 13, weight: '800' },
-          bodyColor: 'rgba(255,255,255,0.85)',
-          bodyFont: { size: 12 },
-          padding: 14,
-          cornerRadius: 12,
-          boxPadding: 6,
           callbacks: {
-            title: items => items[0]?.label || '',
-            label: ctx => {
-              const v = ctx.parsed.y;
-              return '  ' + ctx.dataset.label + ': ' + (v != null ? v.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' €' : '0,00 €');
-            }
+            label: ctx => ' ' + ctx.dataset.label + ': ' + (ctx.parsed.y != null ? ctx.parsed.y.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' €' : '0,00 €')
           }
         }
       },
       scales: {
-        y: {
-          beginAtZero: true,
-          grid: { color: 'rgba(150,150,150,0.07)', drawBorder: false },
-          ticks: { callback: v => v + ' €', font: { size: 11 }, color: 'rgba(150,150,150,0.8)' },
-          border: { display: false }
-        },
-        x: {
-          grid: { display: false },
-          ticks: { font: { size: 12, weight: '700' }, color: 'rgba(150,150,150,0.9)' },
-          border: { display: false }
-        }
+        y: { beginAtZero: true, grid: { color: 'rgba(150,150,150,0.08)' } },
+        x: { grid: { display: false } }
       }
     }
   });
 
-  // Legenda inline sotto il grafico
-  if (legendEl) {
-    legendEl.innerHTML = '';
-    activeCats.forEach((cat) => {
-      const ci = allCats.indexOf(cat);
-      const color = TREND_COLORS[ci % TREND_COLORS.length];
-      const icon = getCatIcon ? getCatIcon(cat) : '';
-      const item = document.createElement('div');
-      item.style.cssText = 'display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:700;color:var(--text2);';
-      item.innerHTML = `<span style="display:inline-block;width:22px;height:4px;border-radius:4px;background:${color}"></span><span>${icon} ${cat}</span>`;
-      legendEl.appendChild(item);
-    });
-  }
 }
 
 function renderCharts(month) {
@@ -8299,10 +8224,13 @@ function saveTransfer() {
     let trData = (() => { try { return JSON.parse(localStorage.getItem(accKey(_activeAccId, 'tr_cash'))) ?? { balance: 0, rate: 3.75, startDate: '' }; } catch(e) { return { balance: 0, rate: 3.75, startDate: '' }; } })();
     trData.balance = Math.max(0, (trData.balance || 0) - amount);
     localStorage.setItem(accKey(_activeAccId, 'tr_cash'), JSON.stringify(trData));
+    // Aggiorna anche l'oggetto TR in memoria
+    if (typeof TR !== 'undefined') TR.cash.balance = trData.balance;
     // Log in TR txns
     let trTxns = (() => { try { return JSON.parse(localStorage.getItem(accKey(_activeAccId, 'tr_txns'))) ?? []; } catch(e) { return []; } })();
     trTxns.push({ type: 'withdrawal', desc: 'Prelievo verso ' + toLabel, amount: -amount, date: new Date().toLocaleDateString('it-IT') });
     localStorage.setItem(accKey(_activeAccId, 'tr_txns'), JSON.stringify(trTxns));
+    if (typeof TR !== 'undefined') TR.txns = trTxns;
   } else {
     // Uscita dal metodo wallet standard
     AppState.data.push({ desc: 'Trasferimento → ' + toLabel, amount: -amount, category: 'Trasferimento', month, method: _transferFrom, day, transfer: true });
@@ -8315,10 +8243,13 @@ function saveTransfer() {
     if (!trData.startDate) trData.startDate = new Date().toISOString().slice(0, 10);
     trData.balance = (trData.balance || 0) + amount;
     localStorage.setItem(accKey(_activeAccId, 'tr_cash'), JSON.stringify(trData));
+    // Aggiorna anche l'oggetto TR in memoria
+    if (typeof TR !== 'undefined') TR.cash.balance = trData.balance;
     // Log in TR txns
     let trTxns = (() => { try { return JSON.parse(localStorage.getItem(accKey(_activeAccId, 'tr_txns'))) ?? []; } catch(e) { return []; } })();
     trTxns.push({ type: 'deposit', desc: 'Deposito da ' + fromLabel, amount: amount, date: new Date().toLocaleDateString('it-IT') });
     localStorage.setItem(accKey(_activeAccId, 'tr_txns'), JSON.stringify(trTxns));
+    if (typeof TR !== 'undefined') TR.txns = trTxns;
   } else {
     // Entrata nel metodo wallet standard
     AppState.data.push({ desc: 'Trasferimento ← ' + fromLabel, amount: amount, category: 'Trasferimento', month, method: _transferTo, day, transfer: true });
@@ -8328,8 +8259,9 @@ function saveTransfer() {
   document.getElementById('transferOverlay').style.display = 'none';
   showToast('✅ Trasferito ' + cur(amount, 0) + ' → ' + toLabel);
 
-  // Se siamo nel tab TR, aggiorna anche quello
-  if (_currentTab === 'tr') renderTradeRepublic();
+  if (typeof renderTrHero      === 'function') renderTrHero();
+  if (typeof renderTradeRepublic === 'function' && _currentTab === 'tr') renderTradeRepublic();
+  if (typeof renderAll         === 'function') renderAll();
 }
 
 
@@ -10384,21 +10316,20 @@ function trOpenDetail(idx) {
       if (typeof _currentTab!=='undefined' && _currentTab==='tr') renderTradeRepublic();
     };
   }
-  window.totalBalance = function() {
-    let appBal = AppState.data.reduce((s,i)=>{
-      // Escludi transazioni TR: già conteggiate in trCash/trPort
-      if (i.method === '__trade_republic__') return s;
-      // Escludi lato wallet di trasferimenti verso/da TR
-      if (i.transfer && i.desc && i.desc.includes('Trade Republic')) return s;
-      return s + Number(i.amount);
-    }, 0);
-    const trCash = TR?.cash?.balance||0;
+    window.totalBalance = function() {
+    let appBal = 0;
+    AppState.data.forEach(i => {
+      if (i.transfer || i.category === 'Trasferimento') return;
+      if (i.method === '__trade_republic__') return;
+      appBal += Number(i.amount);
+    });
+    const trCash = TR?.cash?.balance || 0;
     const trPort = (TR?.holdings||[]).reduce((s,h)=>{
       const q = h.lots ? h.lots.reduce((a,l)=>a+Number(l.qty),0) : (h.qty||0);
       const avg = h.lots&&h.lots.length ? h.lots.reduce((a,l)=>a+Number(l.qty)*Number(l.buyPrice),0)/Math.max(q,1) : (h.avgPrice||0);
       return s+(h.currentPrice??avg)*q;
     },0);
-    return appBal+trCash+trPort;
+    return appBal + trCash + trPort;
   };
   // Start auto-refresh
   if (typeof trStartAutoRefresh==='function') trStartAutoRefresh();
