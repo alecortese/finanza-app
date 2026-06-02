@@ -600,10 +600,212 @@ body {
 }
 
 .search-input:focus { width: clamp(120px, 38vw, 170px); box-shadow: 0 0 0 3px rgba(52,97,255,.15); border-color: var(--blue); }
+.search-input.global-active { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(244,113,26,.15); width: clamp(120px, 38vw, 170px); }
+.search-global-badge {
+  display: none;
+  font-size: .66rem; font-weight: 800; letter-spacing: .04em;
+  color: var(--orange); background: var(--orange-bg);
+  border-radius: 6px; padding: 2px 6px; margin-left: 6px;
+  vertical-align: middle;
+}
+.search-global-badge.visible { display: inline; }
+/* Global search results overlay */
+#globalSearchResults {
+  display: none;
+  position: fixed; inset: 0; z-index: 8000;
+  background: var(--bg);
+  overflow-y: auto;
+  padding: clamp(10px,3vw,16px);
+  padding-bottom: 90px;
+}
+#globalSearchResults.open { display: block; }
+.global-sr-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg); padding: 10px 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+.global-sr-title { font-size: 1rem; font-weight: 800; }
+.global-sr-close {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--surface2); border: 1px solid var(--border2);
+  font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.global-sr-month-group { margin-bottom: 10px; }
+.global-sr-month-label {
+  font-size: .7rem; font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text2);
+  padding: 4px 0; margin-bottom: 4px;
+}
 
 /* ─────────────────────────────────────────
-   ADD FORM
+   HEATMAP
 ───────────────────────────────────────── */
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 6px;
+}
+.heatmap-day-labels {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 3px;
+}
+.heatmap-day-label {
+  text-align: center;
+  font-size: .6rem;
+  font-weight: 700;
+  color: var(--text3);
+  letter-spacing: .04em;
+}
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 5px;
+  background: var(--surface2);
+  position: relative;
+  cursor: default;
+  transition: transform .12s;
+}
+.heatmap-cell:hover { transform: scale(1.18); z-index: 2; }
+.heatmap-cell.empty { opacity: 0; pointer-events: none; }
+.heatmap-cell .hm-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  font-size: .66rem;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 4px 7px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+}
+.heatmap-cell:hover .hm-tooltip { display: block; }
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+.heatmap-legend-cell {
+  width: 13px; height: 13px;
+  border-radius: 3px;
+}
+.heatmap-legend span { font-size: .65rem; color: var(--text3); }
+
+/* ─────────────────────────────────────────
+   FORECAST
+───────────────────────────────────────── */
+.forecast-hero {
+  text-align: center;
+  padding: 10px 0 4px;
+}
+.forecast-amount {
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: -.04em;
+  line-height: 1;
+}
+.forecast-label {
+  font-size: .75rem;
+  color: var(--text2);
+  margin-top: 4px;
+  font-weight: 500;
+}
+.forecast-bar-wrap {
+  margin: 14px 0 6px;
+  background: var(--surface2);
+  border-radius: 8px;
+  height: 10px;
+  overflow: hidden;
+  position: relative;
+}
+.forecast-bar-actual {
+  height: 100%;
+  border-radius: 8px 0 0 8px;
+  background: var(--blue);
+  transition: width .6s cubic-bezier(.4,0,.2,1);
+}
+.forecast-bar-proj {
+  position: absolute;
+  top: 0; height: 100%;
+  border-radius: 0 8px 8px 0;
+  opacity: .35;
+}
+.forecast-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: .72rem;
+  color: var(--text2);
+  font-weight: 600;
+  margin-top: 4px;
+}
+.forecast-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.forecast-pill {
+  flex: 1;
+  min-width: 100px;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  text-align: center;
+}
+.forecast-pill-val { font-size: 1rem; font-weight: 800; letter-spacing: -.02em; }
+.forecast-pill-lbl { font-size: .65rem; color: var(--text2); font-weight: 600; margin-top: 2px; }
+
+/* ─────────────────────────────────────────
+   CAT MOM (month-over-month)
+───────────────────────────────────────── */
+.mom-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.mom-row:last-child { border-bottom: none; }
+.mom-icon {
+  width: 32px; height: 32px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .95rem;
+  flex-shrink: 0;
+}
+.mom-label { flex: 1; font-size: .82rem; font-weight: 600; }
+.mom-amounts { text-align: right; }
+.mom-cur-val { font-size: .85rem; font-weight: 800; }
+.mom-arrow {
+  font-size: .72rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.mom-arrow.up   { color: var(--red);   background: var(--red-bg); }
+.mom-arrow.down { color: var(--green); background: var(--green-bg); }
+.mom-arrow.flat { color: var(--text2); background: var(--surface2); }
+
+/* ─────────────────────────────────────────
+   WALLET BREAKDOWN LEGEND
+───────────────────────────────────────── */
+.wb-legend { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.wb-legend-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: .72rem; font-weight: 600; color: var(--text2);
+}
+.wb-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .form-group { margin-bottom: 14px; }
 
 .form-label {
@@ -4222,8 +4424,9 @@ function debouncedRenderAll() {
       <div class="section-title">Storico</div>
       <div class="search-wrap">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="searchBar" class="search-input" placeholder="Cerca..." oninput="renderHistory()">
+        <input type="text" id="searchBar" class="search-input" placeholder="Cerca..." oninput="onSearchInput()" onfocus="onSearchFocus()">
       </div>
+      <span id="globalBadge" class="search-global-badge" title="Ricerca su tutti i mesi">TUTTI</span>
     </div>
 
     <!-- Filter bar -->
@@ -4365,6 +4568,33 @@ function debouncedRenderAll() {
     <div class="card">
       <div class="card-title">Metodo di pagamento — Uscite</div>
       <canvas id="methodChart"></canvas>
+    </div>
+
+    <!-- HEATMAP SPESE GIORNALIERE -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div class="card-title" style="margin-bottom:0;">🗓 Heatmap spese giornaliere</div>
+      </div>
+      <div id="heatmapChart"></div>
+    </div>
+
+    <!-- FORECAST FINE MESE -->
+    <div class="card">
+      <div class="card-title">📈 Proiezione fine mese</div>
+      <div id="forecastCard"></div>
+    </div>
+
+    <!-- BREAKDOWN PATRIMONIO PER METODO -->
+    <div class="card">
+      <div class="card-title">🥧 Patrimonio per metodo</div>
+      <canvas id="walletBreakdownChart"></canvas>
+      <div id="walletBreakdownLegend" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- VARIAZIONE % MESE SU MESE PER CATEGORIA -->
+    <div class="card">
+      <div class="card-title">📊 Variazione categorie mese su mese</div>
+      <div id="catMomList"></div>
     </div>
 
   </div>
@@ -5267,11 +5497,45 @@ function syncMonth(val) {
 }
 
 /* ── DARK MODE ──────────────────────────── */
+// Al primo avvio non c'è preferenza salvata → legge il sistema.
+// Dopo il primo toggle l'utente ha una preferenza esplicita salvata.
+// Il listener su matchMedia aggiorna il tema in tempo reale
+// SOLO finché l'utente non ha mai toccato il toggle (nessuna chiave salvata).
+
+function _systemDark() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
+
+function _isDark() {
+  const saved = localStorage.getItem('themeMode'); // 'dark' | 'light' | null
+  if (saved === 'dark')  return true;
+  if (saved === 'light') return false;
+  return _systemDark(); // primo avvio: segue sistema
+}
+
+function _applyTheme() {
+  const dark = _isDark();
+  document.body.classList.toggle('dark', dark);
+  const btn = document.getElementById('darkBtn');
+  if (btn) {
+    btn.textContent = dark ? '☀️' : '🌙';
+    btn.title = dark ? 'Passa a tema chiaro' : 'Passa a tema scuro';
+  }
+}
+
 function toggleDark() {
-  document.body.classList.toggle('dark');
-  let d = document.body.classList.contains('dark');
-  localStorage.setItem('darkMode', d);
-  document.getElementById('darkBtn').textContent = d ? '☀️' : '🌙';
+  // Prima pressione: fissa l'opposto di ciò che c'è ora
+  const dark = _isDark();
+  localStorage.setItem('themeMode', dark ? 'light' : 'dark');
+  localStorage.removeItem('darkMode'); // rimuovi chiave legacy
+  _applyTheme();
+}
+
+// Segue il sistema in tempo reale finché l'utente non ha mai toccato il toggle
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (!localStorage.getItem('themeMode')) _applyTheme();
+  });
 }
 
 /* ── ADD TRANSACTION ────────────────────── */
@@ -6282,6 +6546,10 @@ function renderCharts(month) {
   renderTrendChart();
   renderYearChart();
   renderMethodChart(month);
+  renderHeatmap(month);
+  renderForecast(month);
+  renderWalletBreakdown();
+  renderCatMoM(month);
 }
 
 function renderCatChart(month) {
@@ -6377,6 +6645,308 @@ function renderMethodChart(month) {
     },
     options: { plugins: { legend: { position: 'bottom' } }, cutout: '65%', responsive: true }
   });
+}
+
+/* ══════════════════════════════════════════════════════════
+   HEATMAP SPESE GIORNALIERE
+══════════════════════════════════════════════════════════ */
+function renderHeatmap(month) {
+  const el = document.getElementById('heatmapChart');
+  if (!el) return;
+
+  // Parse month → year, monthIndex
+  const parts = month.split(' ');
+  const monthName = parts[0]?.toLowerCase();
+  const year = parseInt(parts[1]) || new Date().getFullYear();
+  const MONTHS_IT = ['gennaio','febbraio','marzo','aprile','maggio','giugno',
+                     'luglio','agosto','settembre','ottobre','novembre','dicembre'];
+  const monthIdx = MONTHS_IT.indexOf(monthName);
+  if (monthIdx < 0) { el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:16px 0;font-size:.82rem;">Dati non disponibili</div>'; return; }
+
+  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+  const firstDow = (new Date(year, monthIdx, 1).getDay() + 6) % 7; // 0=Lun
+
+  // Accumula spese per giorno
+  const byDay = {};
+  AppState.data.forEach(i => {
+    if (i.month !== month || i.amount >= 0 || i.transfer || i.category === 'Trasferimento' || i.method === '__trade_republic__') return;
+    const d = i.day || 0;
+    if (d >= 1 && d <= 31) byDay[d] = (byDay[d] || 0) + Math.abs(i.amount);
+  });
+
+  const vals = Object.values(byDay);
+  const maxSpend = vals.length ? Math.max(...vals) : 1;
+  const today = new Date();
+  const isCurrentMonth = today.getMonth() === monthIdx && today.getFullYear() === year;
+  const todayDay = today.getDate();
+
+  // Color scale: 5 levels (surface2 → red)
+  const HEAT_COLORS = ['var(--surface2)', 'rgba(230,57,70,.18)', 'rgba(230,57,70,.38)', 'rgba(230,57,70,.62)', 'rgba(230,57,70,.88)'];
+  function heatColor(amount) {
+    if (!amount) return HEAT_COLORS[0];
+    const ratio = amount / maxSpend;
+    if (ratio < 0.15) return HEAT_COLORS[1];
+    if (ratio < 0.35) return HEAT_COLORS[2];
+    if (ratio < 0.65) return HEAT_COLORS[3];
+    return HEAT_COLORS[4];
+  }
+
+  const DAY_LABELS = ['L','M','M','G','V','S','D'];
+  let html = '<div class="heatmap-day-labels">' + DAY_LABELS.map(d => `<div class="heatmap-day-label">${d}</div>`).join('') + '</div>';
+  html += '<div class="heatmap-grid">';
+
+  // Empty cells before day 1
+  for (let i = 0; i < firstDow; i++) html += '<div class="heatmap-cell empty"></div>';
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const amt = byDay[d] || 0;
+    const color = heatColor(amt);
+    const isToday = isCurrentMonth && d === todayDay;
+    const fmtAmt = amt ? amt.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '€' : 'nessuna spesa';
+    const border = isToday ? 'box-shadow:0 0 0 2px var(--blue);' : '';
+    html += `<div class="heatmap-cell" style="background:${color};${border}">
+      <span class="hm-tooltip">${d} — ${fmtAmt}</span>
+    </div>`;
+  }
+
+  html += '</div>';
+  html += `<div class="heatmap-legend">
+    <span>meno</span>
+    ${HEAT_COLORS.map(c => `<div class="heatmap-legend-cell" style="background:${c};border:1px solid var(--border2);"></div>`).join('')}
+    <span>più</span>
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+/* ══════════════════════════════════════════════════════════
+   FORECAST FINE MESE
+══════════════════════════════════════════════════════════ */
+function renderForecast(month) {
+  const el = document.getElementById('forecastCard');
+  if (!el) return;
+
+  const now = new Date();
+  const MONTHS_IT = ['gennaio','febbraio','marzo','aprile','maggio','giugno',
+                     'luglio','agosto','settembre','ottobre','novembre','dicembre'];
+  const parts = month.split(' ');
+  const mIdx = MONTHS_IT.indexOf(parts[0]?.toLowerCase());
+  const yr = parseInt(parts[1]) || now.getFullYear();
+  const daysInMonth = new Date(yr, mIdx + 1, 0).getDate();
+
+  const isCurrentMonth = now.getMonth() === mIdx && now.getFullYear() === yr;
+  const daysPassed = isCurrentMonth ? now.getDate() : daysInMonth;
+
+  // Spesa effettiva del mese
+  let actualSpend = 0;
+  AppState.data.forEach(i => {
+    if (i.month !== month || i.amount >= 0 || i.transfer || i.category === 'Trasferimento' || i.method === '__trade_republic__') return;
+    actualSpend += Math.abs(i.amount);
+  });
+
+  // Entrate del mese
+  let { inc } = monthData(month);
+
+  if (daysPassed === 0 || actualSpend === 0) {
+    el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:16px 0;font-size:.82rem;">Aggiungi spese per vedere la proiezione</div>';
+    return;
+  }
+
+  const dailyRate = actualSpend / daysPassed;
+  const projected = dailyRate * daysInMonth;
+  const remaining = projected - actualSpend;
+  const barActual = Math.min(100, (actualSpend / projected) * 100);
+  const projColor = projected > inc * 0.9 ? 'var(--red)' : projected > inc * 0.7 ? 'var(--orange)' : 'var(--green)';
+  const barProjColor = projected > inc * 0.9 ? 'rgba(230,57,70,.35)' : projected > inc * 0.7 ? 'rgba(244,113,26,.35)' : 'rgba(13,159,94,.35)';
+
+  const fmtE = v => v.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + '€';
+  const daysLeft = daysInMonth - daysPassed;
+
+  let statusMsg = '';
+  if (projected <= inc * 0.7) statusMsg = '✅ Ritmo sostenibile';
+  else if (projected <= inc * 0.9) statusMsg = '⚠️ Ritmo elevato';
+  else statusMsg = '🔴 Ritmo a rischio';
+
+  el.innerHTML = `
+    <div class="forecast-hero">
+      <div class="forecast-amount" style="color:${projColor}">${fmtE(projected)}</div>
+      <div class="forecast-label">${statusMsg} · proiezione a fine mese</div>
+    </div>
+    <div class="forecast-bar-wrap">
+      <div class="forecast-bar-actual" style="width:${barActual}%;"></div>
+      <div class="forecast-bar-proj" style="left:${barActual}%;width:${100 - barActual}%;background:${barProjColor};"></div>
+    </div>
+    <div class="forecast-meta">
+      <span>Speso: <b>${fmtE(actualSpend)}</b></span>
+      <span>Mancano: <b>${fmtE(Math.max(0, remaining))}</b></span>
+    </div>
+    <div class="forecast-pills">
+      <div class="forecast-pill">
+        <div class="forecast-pill-val">${fmtE(dailyRate)}<span style="font-size:.65rem;font-weight:600;color:var(--text2);">/g</span></div>
+        <div class="forecast-pill-lbl">Media giornaliera</div>
+      </div>
+      <div class="forecast-pill">
+        <div class="forecast-pill-val">${daysLeft}<span style="font-size:.65rem;font-weight:600;color:var(--text2);">gg</span></div>
+        <div class="forecast-pill-lbl">Giorni rimanenti</div>
+      </div>
+      <div class="forecast-pill">
+        <div class="forecast-pill-val" style="color:${inc>0?(projected/inc>1?'var(--red)':'var(--text)'):'var(--text2)'};">${inc > 0 ? Math.round(projected / inc * 100) + '%' : '—'}</div>
+        <div class="forecast-pill-lbl">% su entrate</div>
+      </div>
+    </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════
+   BREAKDOWN PATRIMONIO PER METODO
+══════════════════════════════════════════════════════════ */
+let _walletBreakdownChart = null;
+
+function renderWalletBreakdown() {
+  const canvas = document.getElementById('walletBreakdownChart');
+  const legendEl = document.getElementById('walletBreakdownLegend');
+  if (!canvas || !legendEl) return;
+
+  if (_walletBreakdownChart) { _walletBreakdownChart.destroy(); _walletBreakdownChart = null; }
+
+  const initials = loadInitialBalances();
+  const txnBal = {};
+  WALLET_METHODS.forEach(m => { txnBal[m.key] = 0; });
+  AppState.data.forEach(i => {
+    if (txnBal[i.method] !== undefined) txnBal[i.method] += Number(i.amount);
+  });
+
+  // Build slices
+  const slices = [];
+  WALLET_METHODS.forEach(m => {
+    const val = (initials[m.key] || 0) + (txnBal[m.key] || 0);
+    if (val > 0) slices.push({ label: m.label, value: val, color: m.color, icon: m.icon });
+  });
+
+  // TR cash
+  const trCashBal = (() => { try { return JSON.parse(localStorage.getItem(accKey(_activeAccId, 'tr_cash'))) ?? { balance: 0 }; } catch(e) { return { balance: 0 }; } })().balance || 0;
+  if (trCashBal > 0) slices.push({ label: 'TR Cash', value: trCashBal, color: '#0d9f5e', icon: '💵' });
+
+  // TR portfolio
+  const trHoldings = (() => { try { return JSON.parse(localStorage.getItem(accKey(_activeAccId, 'tr_holdings'))) ?? []; } catch(e) { return []; } })();
+  const trPortVal = trHoldings.reduce((s, h) => {
+    const qty = h.lots ? h.lots.reduce((a, l) => a + Number(l.qty), 0) : (h.qty || 0);
+    return s + (h.currentPrice ?? h.avgPrice ?? 0) * qty;
+  }, 0);
+  if (trPortVal > 0) slices.push({ label: 'TR Portfolio', value: trPortVal, color: '#3461ff', icon: '📈' });
+
+  if (!slices.length) {
+    canvas.style.display = 'none';
+    legendEl.innerHTML = '<div style="color:var(--text3);text-align:center;padding:12px 0;font-size:.82rem;">Nessun patrimonio registrato</div>';
+    return;
+  }
+  canvas.style.display = '';
+
+  const total = slices.reduce((s, sl) => s + sl.value, 0);
+
+  _walletBreakdownChart = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: slices.map(s => s.label),
+      datasets: [{
+        data: slices.map(s => s.value),
+        backgroundColor: slices.map(s => s.color),
+        borderWidth: 0,
+        hoverOffset: 8
+      }]
+    },
+    options: {
+      cutout: '68%',
+      responsive: true,
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  // Custom legend with amounts and %
+  legendEl.innerHTML = '<div class="wb-legend">' +
+    slices.map(s => {
+      const pct = total > 0 ? ((s.value / total) * 100).toFixed(1) : '0';
+      const fmtV = s.value.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+      return `<div class="wb-legend-item">
+        <div class="wb-legend-dot" style="background:${s.color}"></div>
+        <span>${s.icon} ${s.label}</span>
+        <span style="color:var(--text);font-weight:800;">${fmtV}€</span>
+        <span style="color:var(--text3);">(${pct}%)</span>
+      </div>`;
+    }).join('') + '</div>';
+}
+
+/* ══════════════════════════════════════════════════════════
+   VARIAZIONE % MESE SU MESE PER CATEGORIA
+══════════════════════════════════════════════════════════ */
+function renderCatMoM(month) {
+  const el = document.getElementById('catMomList');
+  if (!el) return;
+
+  const MONTHS_IT = ['gennaio','febbraio','marzo','aprile','maggio','giugno',
+                     'luglio','agosto','settembre','ottobre','novembre','dicembre'];
+  const parts = month.split(' ');
+  const mIdx = MONTHS_IT.indexOf(parts[0]?.toLowerCase());
+  const yr = parseInt(parts[1]) || new Date().getFullYear();
+
+  // Previous month
+  let prevMIdx = mIdx - 1, prevYr = yr;
+  if (prevMIdx < 0) { prevMIdx = 11; prevYr--; }
+  const prevMonth = MONTHS_IT[prevMIdx].charAt(0).toUpperCase() + MONTHS_IT[prevMIdx].slice(1) + ' ' + prevYr;
+
+  // Get cats with spending in either month
+  const cats = new Set();
+  AppState.data.forEach(i => {
+    if ((i.month === month || i.month === prevMonth) && i.amount < 0 && !i.transfer && i.category !== 'Trasferimento' && i.method !== '__trade_republic__')
+      cats.add(i.category || 'Altro');
+  });
+
+  if (!cats.size) {
+    el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:16px 0;font-size:.82rem;">Dati insufficienti per il confronto</div>';
+    return;
+  }
+
+  const rows = [];
+  cats.forEach(cat => {
+    const cur = catSpend(month, cat);
+    const prev = catSpend(prevMonth, cat);
+    rows.push({ cat, cur, prev });
+  });
+
+  // Sort by current spend desc
+  rows.sort((a, b) => b.cur - a.cur);
+
+  el.innerHTML = rows.map(r => {
+    const icon = CAT_ICONS[r.cat] || '📦';
+    const cls  = getCatClass(r.cat);
+    const fmtC = r.cur.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '€';
+
+    let arrowHtml = '';
+    if (r.prev === 0 && r.cur > 0) {
+      arrowHtml = `<span class="mom-arrow up">Nuovo</span>`;
+    } else if (r.prev > 0 && r.cur === 0) {
+      arrowHtml = `<span class="mom-arrow down">▼ 100%</span>`;
+    } else if (r.prev > 0) {
+      const pct = ((r.cur - r.prev) / r.prev) * 100;
+      const sign = pct >= 0 ? '+' : '';
+      const cls2 = Math.abs(pct) < 2 ? 'flat' : pct > 0 ? 'up' : 'down';
+      const arrow = Math.abs(pct) < 2 ? '→' : pct > 0 ? '▲' : '▼';
+      arrowHtml = `<span class="mom-arrow ${cls2}">${arrow} ${sign}${pct.toFixed(0)}%</span>`;
+    }
+
+    const prevFmt = r.prev > 0
+      ? `<div style="font-size:.68rem;color:var(--text3);margin-top:1px;">prev: ${r.prev.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div>`
+      : '';
+
+    return `<div class="mom-row">
+      <div class="mom-icon ${cls}">${icon}</div>
+      <div class="mom-label">${r.cat}</div>
+      <div class="mom-amounts">
+        <div class="mom-cur-val">${fmtC}</div>
+        ${prevFmt}
+      </div>
+      ${arrowHtml}
+    </div>`;
+  }).join('');
 }
 
 /* ── GOALS ──────────────────────────────── */
@@ -9270,11 +9840,12 @@ function clearFilters() {
   // Set current day in add form
   document.getElementById('day').placeholder = 'Oggi (' + new Date().getDate() + ')';
 
-  // Dark mode
-  if (localStorage.getItem('darkMode') === 'true') {
-    document.body.classList.add('dark');
-    document.getElementById('darkBtn').textContent = '☀️';
+  // Dark mode — migrazione da chiave legacy 'darkMode'
+  if (localStorage.getItem('darkMode') === 'true' && !localStorage.getItem('themeMode')) {
+    localStorage.setItem('themeMode', 'dark');
   }
+  localStorage.removeItem('darkMode');
+  _applyTheme();
 
   // Build method toggle chips ONCE here — renderDeviation only updates .active class
   const toggleEl = document.getElementById('devMethodToggle');
@@ -9313,6 +9884,9 @@ function clearFilters() {
   buildFilterBar();
 
   renderAll();
+
+  // Widget spese rapide — solo se siamo nella home tab
+  setTimeout(initQuickExpenseWidget, 300);
 })();
 
 /* ═══════════════════════════════════════════
@@ -10848,6 +11422,367 @@ document.addEventListener('DOMContentLoaded', function() {
   setTimeout(trCheckTuesdayInvestment, 2000);
 });
 
+/* ═══════════════════════════════════════════════════════
+   RICERCA GLOBALE
+════════════════════════════════════════════════════════ */
+let _globalSearchOpen = false;
+
+function onSearchFocus() {
+  const q = document.getElementById('searchBar')?.value.trim() || '';
+  if (q.length >= 1) openGlobalSearch(q);
+}
+
+function onSearchInput() {
+  const q = document.getElementById('searchBar')?.value.trim() || '';
+  renderHistory(); // aggiorna lista mese corrente
+  const badge = document.getElementById('globalBadge');
+  const bar = document.getElementById('searchBar');
+  if (q.length >= 1) {
+    openGlobalSearch(q);
+    bar?.classList.add('global-active');
+    if (badge) badge.classList.add('visible');
+  } else {
+    closeGlobalSearch();
+    bar?.classList.remove('global-active');
+    if (badge) badge.classList.remove('visible');
+  }
+}
+
+function openGlobalSearch(q) {
+  let el = document.getElementById('globalSearchResults');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'globalSearchResults';
+    document.body.appendChild(el);
+  }
+  el.classList.add('open');
+  _globalSearchOpen = true;
+  renderGlobalSearch(q, el);
+}
+
+function closeGlobalSearch() {
+  const el = document.getElementById('globalSearchResults');
+  if (el) el.classList.remove('open');
+  _globalSearchOpen = false;
+  const bar = document.getElementById('searchBar');
+  if (bar) bar.classList.remove('global-active');
+  const badge = document.getElementById('globalBadge');
+  if (badge) badge.classList.remove('visible');
+}
+
+function renderGlobalSearch(q, el) {
+  if (!q) { el.innerHTML = ''; return; }
+  const ql = q.toLowerCase();
+
+  // Raccoglie tutte le transazioni da tutti i mesi
+  const allItems = AppState.data
+    .map((item, index) => ({ ...item, index, _isTR: false }))
+    .filter(i => i.method !== '__trade_republic__');
+
+  // Aggiungi TR txns
+  let trItems = [];
+  if (typeof TR !== 'undefined' && TR.txns) {
+    trItems = TR.txns
+      .filter(t => t.type !== 'roundup' && t.type !== 'roundup_invest')
+      .map((t, idx) => ({
+        desc: t.desc || '',
+        amount: t.amount,
+        category: t.type === 'income' ? 'Entrata' : 'Spese',
+        method: '__trade_republic__',
+        day: t.date ? parseInt(t.date.split('/')[0]) : 0,
+        month: (() => {
+          if (!t.date) return '';
+          const parts = t.date.split('/');
+          if (parts.length !== 3) return '';
+          const d = new Date(parts[2], parts[1]-1, parts[0]);
+          return d.toLocaleString('it-IT',{month:'long'}) + ' ' + d.getFullYear();
+        })(),
+        index: idx, _isTR: true
+      }));
+  }
+
+  const combined = [...allItems, ...trItems].filter(i => {
+    const desc = (i.desc || '').toLowerCase();
+    const cat  = (i.category || '').toLowerCase();
+    const amt  = String(Math.abs(i.amount));
+    return desc.includes(ql) || cat.includes(ql) || amt.includes(ql);
+  });
+
+  if (!combined.length) {
+    el.innerHTML = `<div class="global-sr-header">
+      <div class="global-sr-title">🔍 Nessun risultato per «${q}»</div>
+      <button class="global-sr-close" onclick="closeGlobalSearch()">✕</button>
+    </div>`;
+    return;
+  }
+
+  // Raggruppa per mese
+  const byMonth = {};
+  combined.forEach(i => {
+    const m = i.month || '—';
+    if (!byMonth[m]) byMonth[m] = [];
+    byMonth[m].push(i);
+  });
+
+  // Ordina mesi: più recente prima
+  const MONTHS_IT = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+  const monthsorted = Object.keys(byMonth).sort((a, b) => {
+    const parseM = s => { const p = s.split(' '); const mi = MONTHS_IT.indexOf(p[0]?.toLowerCase()); return (parseInt(p[1])||0)*12 + mi; };
+    return parseM(b) - parseM(a);
+  });
+
+  let html = `<div class="global-sr-header">
+    <div class="global-sr-title">🔍 ${combined.length} risultat${combined.length===1?'o':'i'} per «${q}»</div>
+    <button class="global-sr-close" onclick="closeGlobalSearch()">✕</button>
+  </div>`;
+
+  monthsorted.forEach(month => {
+    const items = byMonth[month];
+    html += `<div class="global-sr-month-group"><div class="global-sr-month-label">${month}</div><div class="history-list" style="margin:0 0 4px;">`;
+    items.forEach(item => {
+      const isSaving = item.category === 'Risparmio';
+      const amtColor = item.amount > 0 ? 'var(--green)' : (isSaving ? 'var(--blue)' : 'var(--red)');
+      const icon = getCatIcon(item.category);
+      const catCls = getCatClass(item.category);
+      const sign = item.amount > 0 ? '+' : '';
+      const methodLabel = item.method === '__trade_republic__' ? '📱 TR' : (item.method || '');
+      // Highlight matching text
+      const descHL = highlightMatch(item.desc || '', ql);
+      const catHL  = highlightMatch(item.category || '', ql);
+      html += `<div class="history-wrap" style="overflow:visible;">
+        <div class="txn" style="border-radius:var(--radius-sm);">
+          <div class="txn-icon ${catCls}">${icon}</div>
+          <div class="txn-info">
+            <div class="txn-desc">${descHL}</div>
+            <div class="txn-meta">${catHL}${methodLabel ? ' · ' + methodLabel : ''}${item.day ? ' · giorno ' + item.day : ''}</div>
+          </div>
+          <div class="txn-amount" style="color:${amtColor}">${sign}${Math.abs(item.amount).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2})}€</div>
+        </div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  el.innerHTML = html;
+}
+
+function highlightMatch(text, q) {
+  if (!q) return text;
+  const idx = text.toLowerCase().indexOf(q);
+  if (idx < 0) return text;
+  return text.slice(0, idx) + '<mark style="background:rgba(52,97,255,.2);color:var(--blue);border-radius:3px;padding:0 1px;">' + text.slice(idx, idx + q.length) + '</mark>' + text.slice(idx + q.length);
+}
+
+// Chiudi ricerca globale con Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && _globalSearchOpen) {
+    closeGlobalSearch();
+    document.getElementById('searchBar').value = '';
+    renderHistory();
+  }
+});
+
+/* ═══════════════════════════════════════════════════════
+   WIDGET SPESE RAPIDE
+════════════════════════════════════════════════════════ */
+const QUICK_EXP_KEY = 'quickExpenses_v1';
+
+function loadQuickExpenses() {
+  try { return JSON.parse(localStorage.getItem(QUICK_EXP_KEY) || 'null'); } catch(e) { return null; }
+}
+function saveQuickExpenses(list) {
+  localStorage.setItem(QUICK_EXP_KEY, JSON.stringify(list));
+}
+function defaultQuickExpenses() {
+  return [
+    { id: 1, emoji: '☕', label: 'Bar', amount: 1.50, category: 'Bar', method: 'Contanti' },
+    { id: 2, emoji: '🍕', label: 'Pranzo', amount: 8.00, category: 'Ristoranti', method: 'Contanti' },
+    { id: 3, emoji: '🚌', label: 'Bus', amount: 1.50, category: 'Trasporti', method: 'Contanti' },
+    { id: 4, emoji: '🛒', label: 'Spesa', amount: 15.00, category: 'Casa', method: 'Revolut' },
+  ];
+}
+
+function initQuickExpenseWidget() {
+  if (document.getElementById('quickExpWidget')) return;
+  const fab = document.createElement('div');
+  fab.id = 'quickExpFab';
+  fab.innerHTML = '⚡';
+  fab.title = 'Spese rapide';
+  fab.style.cssText = `
+    position:fixed; bottom:calc(env(safe-area-inset-bottom,0px) + 80px); right:16px;
+    width:48px; height:48px; border-radius:50%; z-index:7000;
+    background:var(--blue); color:#fff; font-size:1.3rem;
+    box-shadow:0 4px 16px rgba(52,97,255,.45);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:transform .18s, box-shadow .18s;
+    border:none; user-select:none;
+  `;
+  fab.addEventListener('click', toggleQuickExpWidget);
+  fab.addEventListener('mouseenter', () => { fab.style.transform = 'scale(1.08)'; });
+  fab.addEventListener('mouseleave', () => { fab.style.transform = ''; });
+  document.body.appendChild(fab);
+
+  const widget = document.createElement('div');
+  widget.id = 'quickExpWidget';
+  widget.style.cssText = `
+    position:fixed; bottom:calc(env(safe-area-inset-bottom,0px) + 136px); right:12px;
+    width:min(320px, calc(100vw - 24px)); z-index:7001;
+    background:var(--surface); border:1px solid var(--border2);
+    border-radius:var(--radius); box-shadow:var(--shadow-md);
+    padding:14px; display:none; transform-origin:bottom right;
+  `;
+  document.body.appendChild(widget);
+  renderQuickExpWidget();
+}
+
+function toggleQuickExpWidget() {
+  const w = document.getElementById('quickExpWidget');
+  if (!w) return;
+  const open = w.style.display !== 'none';
+  if (open) {
+    w.style.animation = 'qwClose .15s ease forwards';
+    setTimeout(() => { w.style.display = 'none'; w.style.animation = ''; }, 140);
+  } else {
+    w.style.display = 'block';
+    w.style.animation = 'qwOpen .18s ease forwards';
+  }
+}
+
+function renderQuickExpWidget() {
+  const w = document.getElementById('quickExpWidget');
+  if (!w) return;
+  const items = loadQuickExpenses() || defaultQuickExpenses();
+  w.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-size:.78rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);">⚡ Spese rapide</div>
+      <button onclick="openQuickExpSettings()" style="background:none;border:none;cursor:pointer;font-size:.8rem;color:var(--text2);padding:2px 6px;border-radius:6px;background:var(--surface2);">⚙️ Modifica</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="quickExpGrid">
+      ${items.map(it => `
+        <button onclick="addQuickExpense(${it.id})" style="
+          display:flex;flex-direction:column;align-items:center;justify-content:center;
+          gap:3px; padding:10px 6px; border-radius:var(--radius-sm);
+          background:var(--surface2); border:1px solid var(--border);
+          cursor:pointer; transition:background .15s,transform .12s;
+          font-family:var(--font);
+        "
+        onmouseenter="this.style.background='var(--surface3)'"
+        onmouseleave="this.style.background='var(--surface2)'"
+        onmousedown="this.style.transform='scale(.94)'"
+        onmouseup="this.style.transform=''">
+          <span style="font-size:1.5rem;">${it.emoji}</span>
+          <span style="font-size:.72rem;font-weight:700;color:var(--text);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.label}</span>
+          <span style="font-size:.78rem;font-weight:800;color:var(--red);">${it.amount.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2})}€</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function addQuickExpense(id) {
+  const items = loadQuickExpenses() || defaultQuickExpenses();
+  const it = items.find(i => i.id === id);
+  if (!it) return;
+  const m = getMonth();
+  const day = new Date().getDate();
+  AppState.data.push({ desc: it.emoji + ' ' + it.label, amount: -it.amount, category: it.category, month: m, method: it.method, day });
+  save();
+  renderAll();
+  showToast('⚡ ' + it.label + ' −' + it.amount.toLocaleString('it-IT',{minimumFractionDigits:2}) + '€ aggiunto');
+  // Feedback visivo sul bottone
+  const grid = document.getElementById('quickExpGrid');
+  if (grid) {
+    const btns = grid.querySelectorAll('button');
+    const idx = items.findIndex(i => i.id === id);
+    if (btns[idx]) {
+      btns[idx].style.background = 'var(--green-bg)';
+      btns[idx].style.borderColor = 'var(--green)';
+      setTimeout(() => { btns[idx].style.background = 'var(--surface2)'; btns[idx].style.borderColor = 'var(--border)'; }, 600);
+    }
+  }
+}
+
+function openQuickExpSettings() {
+  const items = loadQuickExpenses() || defaultQuickExpenses();
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-width:480px;padding:20px;max-height:80vh;overflow-y:auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="font-size:1rem;font-weight:800;">⚙️ Modifica spese rapide</div>
+        <button onclick="this.closest('.qe-settings-ov').remove()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--text2);" class="qe-close-x">✕</button>
+      </div>
+      <div id="qeSettingsList"></div>
+      <button onclick="addQuickExpItem()" style="width:100%;padding:11px;border-radius:12px;background:var(--blue-bg);color:var(--blue);border:1px dashed var(--blue);font-weight:700;cursor:pointer;margin-top:8px;font-family:var(--font);">+ Aggiungi voce</button>
+      <button onclick="saveQuickExpSettings()" style="width:100%;padding:12px;border-radius:12px;background:var(--blue);color:#fff;border:none;font-weight:700;cursor:pointer;margin-top:8px;font-family:var(--font);">💾 Salva</button>
+    </div>
+  `;
+  overlay.className = 'qe-settings-ov';
+  overlay.querySelector('.qe-close-x').onclick = () => overlay.remove();
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  renderQeSettingsList(items);
+}
+
+let _qeEditItems = null;
+function renderQeSettingsList(items) {
+  _qeEditItems = JSON.parse(JSON.stringify(items));
+  const list = document.getElementById('qeSettingsList');
+  if (!list) return;
+  const methods = ['Contanti','Casa','Revolut','Banca','__trade_republic__'];
+  const cats = CATEGORIES.filter(c => c.type === 'expense' || c.type === 'both').map(c => c.name);
+  list.innerHTML = _qeEditItems.map((it, idx) => `
+    <div style="background:var(--surface2);border-radius:12px;padding:10px;margin-bottom:8px;border:1px solid var(--border);" id="qeItem_${idx}">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+        <input value="${it.emoji}" maxlength="2" data-field="emoji" data-idx="${idx}" style="width:44px;text-align:center;font-size:1.3rem;padding:4px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:var(--font);" oninput="qeFieldChange(${idx},'emoji',this.value)">
+        <input value="${it.label}" placeholder="Nome" data-field="label" data-idx="${idx}" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:var(--font);font-weight:600;" oninput="qeFieldChange(${idx},'label',this.value)">
+        <input type="number" value="${it.amount}" min="0.01" step="0.01" placeholder="€" style="width:70px;padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:var(--font);font-weight:700;" oninput="qeFieldChange(${idx},'amount',parseFloat(this.value)||0)">
+        <button onclick="qeRemoveItem(${idx})" style="background:var(--red-bg);color:var(--red);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-family:var(--font);">🗑</button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <select onchange="qeFieldChange(${idx},'category',this.value)" style="flex:1;padding:7px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:var(--font);">
+          ${cats.map(c => `<option ${c===it.category?'selected':''}>${c}</option>`).join('')}
+        </select>
+        <select onchange="qeFieldChange(${idx},'method',this.value)" style="flex:1;padding:7px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:var(--font);">
+          ${methods.map(m => `<option value="${m}" ${m===it.method?'selected':''}>${m==='__trade_republic__'?'📱 TR':m}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+  `).join('');
+}
+
+function qeFieldChange(idx, field, val) {
+  if (!_qeEditItems) return;
+  _qeEditItems[idx][field] = val;
+}
+function qeRemoveItem(idx) {
+  if (!_qeEditItems) return;
+  _qeEditItems.splice(idx, 1);
+  renderQeSettingsList(_qeEditItems);
+}
+function addQuickExpItem() {
+  if (!_qeEditItems) _qeEditItems = [];
+  _qeEditItems.push({ id: Date.now(), emoji: '💸', label: 'Nuova', amount: 5.00, category: 'Altro', method: 'Contanti' });
+  renderQeSettingsList(_qeEditItems);
+}
+function saveQuickExpSettings() {
+  if (!_qeEditItems) return;
+  saveQuickExpenses(_qeEditItems);
+  renderQuickExpWidget();
+  document.querySelector('.qe-settings-ov')?.remove();
+  showToast('✅ Spese rapide aggiornate');
+}
+
 </script>
+<style>
+@keyframes qwOpen {
+  from { opacity:0; transform: scale(.88) translateY(12px); }
+  to   { opacity:1; transform: scale(1) translateY(0); }
+}
+@keyframes qwClose {
+  from { opacity:1; transform: scale(1); }
+  to   { opacity:0; transform: scale(.88) translateY(8px); }
+}
+</style>
 </body>
 </html>
