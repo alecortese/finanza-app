@@ -54,8 +54,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .app{max-width:520px;margin:0 auto;padding:0 0 100px}
 
 /* ── TOPBAR ── */
+/* Il padding-top usa env(safe-area-inset-top): su iPhone con notch/Dynamic
+   Island, questo valore lo fornisce il sistema operativo (0 sui browser
+   normali, es. Safari con barra degli indirizzi visibile; un valore >0
+   solo in modalità standalone/PWA installata, dove non c'è più la barra
+   del browser a "spingere giù" automaticamente il contenuto). Il fallback
+   "14px" prima della virgola nel calc() si applica sui browser che non
+   supportano affatto env() (rarissimi ormai, ma calc() con env() sconosciuto
+   viene ignorato dal browser risalendo al valore intero, quindi è comunque
+   sicuro). Risultato pratico: i bottoni restano sempre sotto al notch,
+   mai coperti né non cliccabili, sia in Safari normale sia da app installata. */
 .topbar{display:flex;align-items:center;justify-content:space-between;
-  padding:14px clamp(12px,3vw,20px);position:sticky;top:0;z-index:50;
+  padding:calc(14px + env(safe-area-inset-top)) clamp(12px,3vw,20px) 14px;
+  position:sticky;top:0;z-index:50;
   background:var(--bg);transition:background .35s;gap:8px}
 .topbar-logo{font-size:.95rem;font-weight:800;letter-spacing:-.03em;
   display:flex;align-items:center;gap:6px}
@@ -157,10 +168,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .search-input:focus{width:clamp(120px,38vw,170px);box-shadow:0 0 0 3px rgba(52,97,255,.15);border-color:var(--blue)}
 
 /* ── BOTTOM NAV ── */
-.bottomnav{position:fixed;bottom:16px;
+/* Stesso principio della topbar, ma sul lato opposto: su iPhone senza
+   tasto Home, in basso c'è una fascia gestuale (la "home indicator bar")
+   che env(safe-area-inset-bottom) quantifica (in genere ~34px in
+   standalone). Senza questo margine aggiuntivo, i 16px fissi bastavano
+   nel browser ma in PWA installata lasciano la nav troppo vicina a quella
+   fascia, rendendo il tap sui bottoni più bassi meno affidabile. */
+.bottomnav{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom));
   left:50%;transform:translateX(-50%);background:var(--surface);
   border:1px solid var(--border2);border-radius:42px;display:flex;align-items:center;
-  gap:1px;padding:5px 6px;
+  gap:2px;padding:6px 7px;
   box-shadow:0 8px 40px rgba(0,0,0,.18),0 2px 8px rgba(0,0,0,.08);
   z-index:200;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
   transition:background .35s,border-color .35s;
@@ -170,8 +187,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
   scrollbar-width:none;
   -ms-overflow-style:none}
 .bottomnav::-webkit-scrollbar{display:none}
-.nav-btn{background:none;border:none;width:36px;height:36px;border-radius:50%;
-  font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;
+.nav-btn{background:none;border:none;width:44px;height:44px;border-radius:50%;
+  font-size:1.15rem;cursor:pointer;display:flex;align-items:center;justify-content:center;
   color:var(--text);opacity:.35;transition:all .22s cubic-bezier(.4,0,.2,1);
   flex-shrink:0;
   -webkit-tap-highlight-color:transparent}
@@ -818,7 +835,7 @@ button[onclick="rndExportPrint()"]:hover{background:#3730a3!important}
 /* ── NAV ADD BUTTON (central + in pill nav) ─────────────── */
 .nav-add-btn{
   background:var(--blue);border:none;
-  width:40px;height:40px;border-radius:50%;
+  width:50px;height:50px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;flex-shrink:0;margin:0 2px;
   box-shadow:0 4px 18px rgba(52,97,255,.45);
@@ -2105,7 +2122,7 @@ button[onclick="rndExportPrint()"]:hover{background:#3730a3!important}
   <button class="nav-btn"        id="nb-transactions"  onclick="switchTab('transactions')"  title="Transazioni">↕️</button>
   <button class="nav-btn"        id="nb-budget"        onclick="switchTab('budget')"        title="Budget">🎯</button>
   <button class="nav-add-btn" onclick="openSheet()" title="Aggiungi transazione" aria-label="Aggiungi transazione">
-    <span style="font-size:1.5rem;line-height:1;color:#fff;font-weight:300">+</span>
+    <span style="font-size:1.7rem;line-height:1;color:#fff;font-weight:300">+</span>
   </button>
   <button class="nav-btn"        id="nb-charts"        onclick="switchTab('charts')"        title="Grafici">📉</button>
   <button class="nav-btn"        id="nb-tr"            onclick="switchTab('tr')"            title="Trade Republic">📈</button>
