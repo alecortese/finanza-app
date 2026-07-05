@@ -2012,30 +2012,6 @@ button[onclick="rndExportPrint()"]:hover{background:#3730a3!important}
   </div>
 </div>
 
-<!-- ── SHEET IMPOSTAZIONI AUTOMAZIONE ── -->
-<div class="sheet-overlay" id="auto-settings-sheet" onclick="closeAutoSettingsOut(event)">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title" id="auto-settings-title">Impostazioni Saveback</div>
-    <input type="hidden" id="auto-settings-type">
-
-    <!-- MOLTIPLICATORE -->
-    <div class="form-group">
-      <label class="form-label">Moltiplicatore</label>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:2px" id="multiplier-grid"></div>
-      <div style="font-size:.72rem;color:var(--text2);margin-top:8px;font-weight:500" id="multiplier-hint"></div>
-    </div>
-
-    <!-- ETF DESTINAZIONE -->
-    <div class="form-group">
-      <label class="form-label">Investimento automatico in</label>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-top:2px" id="auto-etf-list"></div>
-    </div>
-
-    <button class="btn-submit" onclick="saveAutoSettings()">Salva impostazioni</button>
-  </div>
-</div>
-
 
 <!-- ── SHEET OBIETTIVO RISPARMIO ── -->
 <div class="sheet-overlay" id="savings-goal-sheet" onclick="if(event.target.id==='savings-goal-sheet')document.getElementById('savings-goal-sheet').classList.remove('open')">
@@ -6239,94 +6215,14 @@ document.addEventListener('touchstart', e=>{
   }
 },{passive:true})
 
-// ── AUTOMAZIONI SETTINGS ─────────────────────────────────────────────────────
-let _autoType = 'saveback'
-let _autoMultiplier = 1
-let _autoEtf = 'msci'
-
-const MULTIPLIERS = [1,2,3,4,5]
-
-function openAutoSettings(type){
-  _autoType = type
-  _autoMultiplier = type === 'saveback' ? TR_DATA.savebackMultiplier : TR_DATA.roundupMultiplier
-  _autoEtf        = type === 'saveback' ? TR_DATA.savebackTargetEtf  : TR_DATA.roundupTargetEtf
-
-  document.getElementById('auto-settings-title').textContent =
-    type === 'saveback' ? '⚙️ Impostazioni Saveback' : '⚙️ Impostazioni Round Up'
-
-  document.getElementById('auto-settings-type').value = type
-  buildMultiplierGrid()
-  buildEtfList()
-  document.getElementById('auto-settings-sheet').classList.add('open')
-}
-
-function closeAutoSettingsOut(e){
-  if(e.target.id === 'auto-settings-sheet')
-    document.getElementById('auto-settings-sheet').classList.remove('open')
-}
-
-function buildMultiplierGrid(){
-  const hint = {
-    saveback: ['1% reinvestito','2% reinvestito','3% reinvestito','4% reinvestito','5% reinvestito'],
-    roundup:  ['Arrotonda a 1€','Arrotonda a 2€','Arrotonda a 3€','Arrotonda a 4€','Arrotonda a 5€'],
-  }
-  document.getElementById('multiplier-grid').innerHTML = MULTIPLIERS.map(m => `
-    <button onclick="selectMultiplier(${m})" id="mult-btn-${m}"
-      style="padding:10px 0;border-radius:12px;border:2px solid ${_autoMultiplier===m?'var(--blue)':'var(--border2)'};
-      background:${_autoMultiplier===m?'var(--blue-bg)':'var(--surface2)'};
-      color:${_autoMultiplier===m?'var(--blue)':'var(--text2)'};
-      font-size:.9rem;font-weight:900;cursor:pointer;font-family:var(--font);transition:all .15s">
-      ${m}×
-    </button>`).join('')
-  document.getElementById('multiplier-hint').textContent =
-    hint[_autoType][_autoMultiplier - 1] || ''
-}
-
-function selectMultiplier(m){
-  _autoMultiplier = m
-  buildMultiplierGrid()
-}
-
-function buildEtfList(){
-  const etfs = Object.entries(TR_ETF_META).filter(([k]) => k !== 'custom')
-  document.getElementById('auto-etf-list').innerHTML = etfs.map(([key, meta]) => `
-    <div onclick="selectAutoEtf('${key}')" id="etf-opt-${key}"
-      style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:14px;cursor:pointer;
-      border:2px solid ${_autoEtf===key?'var(--blue)':'var(--border)'};
-      background:${_autoEtf===key?'var(--blue-bg)':'var(--surface2)'};transition:all .15s">
-      <div style="width:34px;height:34px;border-radius:10px;background:${meta.bg};
-        display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${meta.e}</div>
-      <div style="flex:1">
-        <div style="font-size:.85rem;font-weight:700;color:${_autoEtf===key?'var(--blue)':'var(--text)'}">${meta.n}</div>
-      </div>
-      <div style="width:20px;height:20px;border-radius:50%;border:2px solid ${_autoEtf===key?'var(--blue)':'var(--border2)'};
-        background:${_autoEtf===key?'var(--blue)':'transparent'};display:flex;align-items:center;
-        justify-content:center;flex-shrink:0;transition:all .15s">
-        ${_autoEtf===key?'<span style="color:#fff;font-size:.6rem;font-weight:900">✓</span>':''}
-      </div>
-    </div>`).join('')
-}
-
-function selectAutoEtf(key){
-  _autoEtf = key
-  buildEtfList()
-}
-
-function saveAutoSettings(){
-  const type = document.getElementById('auto-settings-type').value
-  if(type === 'saveback'){
-    TR_DATA.savebackMultiplier = _autoMultiplier
-    TR_DATA.savebackTargetEtf  = _autoEtf
-  } else {
-    TR_DATA.roundupMultiplier = _autoMultiplier
-    TR_DATA.roundupTargetEtf  = _autoEtf
-  }
-  document.getElementById('auto-settings-sheet').classList.remove('open')
-  renderTR()
-  const meta = TR_ETF_META[_autoEtf] || TR_ETF_META.custom
-  showToast('✅ Salvato: ' + _autoMultiplier + '× → ' + meta.n)
-}
-
+// Nota: qui esisteva un secondo sistema di "Impostazioni Saveback/Round Up"
+// (openAutoSettings), parallelo e mai collegato a nessun bottone reale —
+// probabilmente un refactor iniziato e mai completato. Rimosso perché
+// definiva una funzione selectMultiplier con lo stesso nome di quella vera
+// (in openAutomationSheet, più sopra), sovrascrivendola silenziosamente: il
+// salvataggio del moltiplicatore nel sheet VERO non funzionava più
+// correttamente a causa di questa collisione. Bug reale trovato e risolto
+// insieme alla pulizia, non solo codice morto.
 // Update renderTrToggles to show multiplier + target in description
 const _origRenderToggles = renderTrToggles
 // Wrap to also update desc lines
@@ -6808,9 +6704,6 @@ function openTrSavingsModal(){
 function closeTrSheet(e){
   if(e.target.id==='tr-savings-sheet')document.getElementById('tr-savings-sheet').classList.remove('open')
 }
-function closeTrSavingsSheet(){
-  document.getElementById('tr-savings-sheet').classList.remove('open')
-}
 
 document.getElementById('tr-f-etf')?.addEventListener('change',function(){
   document.getElementById('tr-custom-group').style.display=this.value==='custom'?'block':'none'
@@ -6956,10 +6849,6 @@ function computeMonthlyStats(n){
 let trendMonths=6
 
 function getDark(){ return document.body.classList.contains('dark') }
-function hexToRgb(hex,a=1){
-  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16)
-  return `rgba(${r},${g},${b},${a})`
-}
 
 
 // Helper: mese corrente di calendario, sempre quello reale del dispositivo.
