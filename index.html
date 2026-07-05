@@ -73,8 +73,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .logo-dot{width:22px;height:22px;border-radius:7px;background:var(--blue);
   display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:900}
 .topbar-right{display:flex;align-items:center;gap:8px}
-.dark-btn{width:36px;height:36px;border-radius:50%;background:var(--surface);
-  border:1px solid var(--border2);font-size:.95rem;cursor:pointer;
+.dark-btn{width:44px;height:44px;border-radius:50%;background:var(--surface);
+  border:1px solid var(--border2);font-size:1.1rem;cursor:pointer;
   display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);transition:all .2s}
 .dark-btn:active{transform:scale(.88)}
 
@@ -106,10 +106,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .section-header-right{display:flex;align-items:center;gap:8px}
 .section-icon-btn{
   display:flex;align-items:center;justify-content:center;
-  width:30px;height:30px;border-radius:50%;
+  width:36px;height:36px;border-radius:50%;
   border:1.5px solid var(--border2);
   background:var(--surface2);
-  color:var(--text2);font-size:.88rem;font-weight:700;
+  color:var(--text2);font-size:.98rem;font-weight:700;
   cursor:pointer;font-family:var(--font);line-height:1;
   transition:background .14s,border-color .14s,color .14s,transform .12s;
   -webkit-tap-highlight-color:transparent}
@@ -1252,16 +1252,21 @@ button[onclick="rndExportPrint()"]:hover{background:#3730a3!important}
       <div class="hero-amount" id="h-total">—</div>
       <div class="hero-stats">
         <div class="hero-stat">
-          <div class="hero-stat-label">↑ Entrate giugno</div>
+          <div class="hero-stat-label">↑ Entrate <span id="h-income-month">giugno</span></div>
           <div class="hero-stat-val" id="h-income">—</div>
         </div>
         <div class="hero-stat">
-          <div class="hero-stat-label">↓ Uscite giugno</div>
+          <div class="hero-stat-label">↓ Uscite <span id="h-expense-month">giugno</span></div>
           <div class="hero-stat-val" id="h-expense">—</div>
         </div>
       </div>
     </div>
 
+    <!-- AVVISI PROATTIVI: budget vicino/superato al limite, spese ricorrenti
+         in arrivo nei prossimi giorni. Vuoto (display:none) se non c'è
+         nulla di rilevante da segnalare — niente banner vuoto che occupa
+         spazio senza motivo. Popolato da renderHomeAlerts(). -->
+    <div id="home-alerts-banner" style="display:none;margin-bottom:16px"></div>
 
     <!-- CONTI -->
     <div class="section-header">
@@ -1886,6 +1891,46 @@ button[onclick="rndExportPrint()"]:hover{background:#3730a3!important}
     </div>
 
     <div class="section-header" style="padding:0 0 8px">
+      <div class="section-title" style="font-size:.85rem">🎯 Obiettivo di risparmio</div>
+    </div>
+    <!-- Vista normale: importo obiettivo + barra di progresso, o messaggio
+         "nessun obiettivo" se non impostato. -->
+    <div id="pocket-target-display">
+      <div id="pocket-target-info" style="font-size:.78rem;color:var(--text2);margin-bottom:6px"></div>
+      <div id="pocket-target-bar-wrap" style="display:none;margin-bottom:10px">
+        <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden">
+          <div id="pocket-target-bar-fill" style="height:100%;width:0%;background:var(--blue);
+            border-radius:3px;transition:width .3s ease"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button id="pocket-target-set-btn" onclick="openPocketTargetEditor()" style="padding:10px;border-radius:12px;
+          background:var(--surface2);border:1px solid var(--border2);color:var(--text);
+          font-family:var(--font);font-size:.82rem;font-weight:700;cursor:pointer">Imposta</button>
+        <button id="pocket-target-remove-btn" onclick="removePocketTarget()" style="display:none;padding:10px;border-radius:12px;
+          background:var(--surface2);border:1px solid var(--border2);color:var(--red);
+          font-family:var(--font);font-size:.82rem;font-weight:700;cursor:pointer">Rimuovi obiettivo</button>
+      </div>
+    </div>
+    <!-- Editor inline: stesso pattern di "pocket-name-edit" per la rinomina,
+         sostituisce la vista normale invece di apparire come sheet separata. -->
+    <div id="pocket-target-edit" style="display:none;margin-bottom:18px">
+      <label class="form-label">Importo obiettivo (€)</label>
+      <input class="form-input" id="pocket-target-input" type="number" min="1" step="0.01"
+        placeholder="es. 1200" style="margin-bottom:8px"
+        onkeydown="if(event.key==='Enter')confirmPocketTarget();if(event.key==='Escape')cancelPocketTargetEditor()">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button onclick="cancelPocketTargetEditor()" style="padding:10px;border-radius:12px;
+          background:var(--surface2);border:1px solid var(--border2);color:var(--text);
+          font-family:var(--font);font-size:.82rem;font-weight:700;cursor:pointer">Annulla</button>
+        <button onclick="confirmPocketTarget()" style="padding:10px;border-radius:12px;
+          background:var(--blue);border:none;color:#fff;
+          font-family:var(--font);font-size:.82rem;font-weight:700;cursor:pointer">Salva</button>
+      </div>
+    </div>
+    <div style="margin-bottom:18px"></div>
+
+    <div class="section-header" style="padding:0 0 8px">
       <div class="section-title" style="font-size:.85rem">🔁 Trasferimento ricorrente</div>
     </div>
     <div id="pocket-recurring-info" style="font-size:.78rem;color:var(--text2);margin-bottom:10px"></div>
@@ -2458,31 +2503,14 @@ const CATS=[
 // quel momento in poi l'utente lavora sui propri dati persistiti su Firestore,
 // non più su questi.
 const DEMO_ACCOUNTS=[
-  {id:'a1',n:'Casa',          t:'Conto corrente', e:'🏠', c:'#3461ff', bal:824000,  initialBal:780000, d:'Conto principale'},
-  {id:'a2',n:'Banca',         t:'Conto bancario', e:'🏦', c:'#0d9f5e', bal:312000,  initialBal:340000, d:'Conto secondario'},
-  {id:'a3',n:'Portafoglio',   t:'Contanti',       e:'👛', c:'#f4711a', bal:15000,   initialBal:15000,  d:'Denaro contante'},
-  {id:'a4',n:'Revolut',       t:'Carta digitale', e:'💜', c:'#6d28d9', bal:23400,   initialBal:5000,   d:'Revolut ••4291'},
-  {id:'a5',n:'Trade Republic', t:'Investimenti',  e:'📈', c:'#0d9f5e', bal:105000,  initialBal:90000,  d:'ETF & Azioni'},
+  {id:'a1',n:'Casa',          t:'Conto corrente', e:'🏠', c:'#3461ff', bal:0, initialBal:0, d:'Conto principale'},
+  {id:'a2',n:'Banca',         t:'Conto bancario', e:'🏦', c:'#0d9f5e', bal:0, initialBal:0, d:'Conto secondario'},
+  {id:'a3',n:'Portafoglio',   t:'Contanti',       e:'👛', c:'#f4711a', bal:0, initialBal:0, d:'Denaro contante'},
+  {id:'a4',n:'Revolut',       t:'Carta digitale', e:'💜', c:'#6d28d9', bal:0, initialBal:0, d:'Revolut ••4291'},
+  {id:'a5',n:'Trade Republic', t:'Investimenti',  e:'📈', c:'#0d9f5e', bal:0, initialBal:0, d:'ETF & Azioni'},
 ]
 
-const DEMO_TX=[
-  {id:1,  t:'expense',d:'Esselunga',              cat:'alim',  acc:'a1', a:6740,   dt:'2026-06-08'},
-  {id:2,  t:'income', d:'Stipendio',               cat:'stip',  acc:'a1', a:320000, dt:'2026-06-05'},
-  {id:3,  t:'expense',d:'Enel Energia',            cat:'casa',  acc:'a1', a:12400,  dt:'2026-06-03'},
-  {id:4,  t:'expense',d:'Netflix',                 cat:'abbsub',acc:'a1', a:1599,   dt:'2026-06-01'},
-  {id:5,  t:'expense',d:'Ristorante Da Mario',     cat:'rist',  acc:'a4', a:4850,   dt:'2026-05-31'},
-  {id:6,  t:'expense',d:'Benzina Q8',              cat:'tras',  acc:'a1', a:7500,   dt:'2026-05-28'},
-  {id:7,  t:'income', d:'Freelance — Cliente XYZ', cat:'free',  acc:'a1', a:85000,  dt:'2026-05-25'},
-  {id:8,  t:'expense',d:'Farmacia',                cat:'salut', acc:'a4', a:2340,   dt:'2026-05-22'},
-  {id:9,  t:'expense',d:'Zara',                    cat:'shop',  acc:'a4', a:8990,   dt:'2026-05-20'},
-  {id:10, t:'expense',d:'Abbonamento palestra',    cat:'svago', acc:'a1', a:4500,   dt:'2026-05-18'},
-  {id:11, t:'income', d:'Stipendio',               cat:'stip',  acc:'a1', a:320000, dt:'2026-05-05'},
-  {id:12, t:'expense',d:'Affitto',                 cat:'casa',  acc:'a1', a:80000,  dt:'2026-05-01'},
-  {id:13, t:'expense',d:'Lidl',                    cat:'alim',  acc:'a1', a:4320,   dt:'2026-04-29'},
-  {id:14, t:'income', d:'Stipendio',               cat:'stip',  acc:'a1', a:320000, dt:'2026-04-05'},
-  {id:15, t:'expense', d:'IKEA',                    cat:'casa',  acc:'a4', a:15600,  dt:'2026-04-12'},
-  {id:16, t:'transfer',d:'Casa → Revolut',           cat:'altro', acc:'a1', toAcc:'a4', a:20000, dt:'2026-06-07'},
-]
+const DEMO_TX=[]
 
 const DEMO_SAVINGS_GOAL = {targetCents:100000}
 
@@ -2818,10 +2846,31 @@ function renderPocketsList(){
     const emoji = p.emoji || POCKET_DEFAULT_EMOJI
     const color = p.color || '#6d28d9'
     const iconBg = color + '22' // ~13% opacità, stesso stile delle categorie
-    return `<div class="cb-row" onclick="openPocketDetail('${p.id}')" style="cursor:pointer">
+
+    // Barra di progresso verso l'obiettivo: SOLO se p.targetCents è
+    // impostato. I Pocket creati prima di questa funzionalità non hanno
+    // questo campo (undefined) — la condizione tratta undefined e null
+    // allo stesso modo di "nessun obiettivo", nessuna migrazione dati
+    // necessaria.
+    const targetHtml = p.targetCents ? (() => {
+      const pct = Math.min(100, Math.round(p.balCents / p.targetCents * 100))
+      const reached = pct >= 100
+      return `<div style="margin-top:6px">
+        <div style="height:5px;background:var(--surface2);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${reached?'var(--green)':color};
+            border-radius:3px;transition:width .3s ease"></div>
+        </div>
+        <div style="font-size:.68rem;color:var(--text3);margin-top:3px">
+          ${reached?'🎯 Obiettivo raggiunto!':`${pct}% di ${fmt(p.targetCents)}`}
+        </div>
+      </div>`
+    })() : ''
+
+    return `<div class="cb-row" onclick="openPocketDetail('${p.id}')" style="cursor:pointer;flex-wrap:wrap">
       <div class="cb-icon" style="background:${iconBg};font-size:1.1rem">${emoji}</div>
       <div class="cb-info">
         <div class="cb-label">${escapeHtml(p.name)} ${hasRecurring?'<span style="font-size:.65rem;color:var(--text3)">🔁</span>':''}</div>
+        ${targetHtml}
       </div>
       <div class="cb-right">
         <div class="cb-amounts" style="font-weight:700;color:${color}">${fmt(p.balCents)}</div>
@@ -2850,7 +2899,7 @@ function renderPocketColorPalette(selectedHex){
   if(!el) return
   el.innerHTML = POCKET_COLORS.map(c=>`
     <div onclick="selectPocketColor('${c.hex}')" title="${c.label}"
-      style="width:32px;height:32px;border-radius:50%;background:${c.hex};cursor:pointer;
+      style="width:40px;height:40px;border-radius:50%;background:${c.hex};cursor:pointer;
       box-shadow:${c.hex===selectedHex?'0 0 0 3px var(--surface), 0 0 0 5px '+c.hex:'none'};
       transition:box-shadow .15s ease;flex-shrink:0">
     </div>`).join('')
@@ -2879,6 +2928,7 @@ function addPocket(accId, name, emoji, color){
     emoji: emoji || POCKET_DEFAULT_EMOJI,
     color: color || '#6d28d9',
     balCents: 0,
+    targetCents: null, // obiettivo di risparmio opzionale — null = nessun obiettivo impostato
     recurringTransferId: null,
     history: []
   }
@@ -2911,6 +2961,12 @@ function openPocketDetail(pocketId){
   document.getElementById('pocket-detail-name').textContent = emoji + ' ' + pocket.name
   document.getElementById('pocket-detail-balance').textContent = fmt(pocket.balCents)
 
+  renderPocketTargetSection(pocket)
+  // L'editor inline parte sempre chiuso quando si riapre la sheet, per non
+  // lasciare in giro un campo di modifica aperto da una visita precedente.
+  document.getElementById('pocket-target-edit').style.display = 'none'
+  document.getElementById('pocket-target-display').style.display = 'block'
+
   const recInfo = document.getElementById('pocket-recurring-info')
   const recBtn = document.getElementById('pocket-recurring-btn')
   if(pocket.recurringTransferId){
@@ -2926,6 +2982,78 @@ function openPocketDetail(pocketId){
 }
 function closePocketDetailSheetOut(e){
   if(e.target.id==='pocket-detail-sheet') document.getElementById('pocket-detail-sheet').classList.remove('open')
+}
+
+// Popola la sezione "🎯 Obiettivo di risparmio" nella sheet di dettaglio.
+// A differenza dei Savings Goals a lungo termine (dove il progresso va
+// aggiornato manualmente dall'utente), qui il progresso è SEMPRE
+// balCents del Pocket stesso — che si aggiorna già in automatico ad ogni
+// accantonamento/prelievo/spesa. Nessun doppio inserimento da mantenere
+// sincronizzato, nessun rischio che il numero mostrato diverga dal saldo
+// reale del Pocket.
+function renderPocketTargetSection(pocket){
+  const infoEl = document.getElementById('pocket-target-info')
+  const barWrap = document.getElementById('pocket-target-bar-wrap')
+  const barFill = document.getElementById('pocket-target-bar-fill')
+  const setBtn = document.getElementById('pocket-target-set-btn')
+  const removeBtn = document.getElementById('pocket-target-remove-btn')
+
+  if(pocket.targetCents){
+    const pct = Math.min(100, Math.round(pocket.balCents / pocket.targetCents * 100))
+    const reached = pct >= 100
+    infoEl.textContent = reached
+      ? `🏆 Obiettivo raggiunto: ${fmt(pocket.balCents)} di ${fmt(pocket.targetCents)}`
+      : `${fmt(pocket.balCents)} di ${fmt(pocket.targetCents)} (${pct}%)`
+    barWrap.style.display = 'block'
+    barFill.style.width = pct + '%'
+    barFill.style.background = reached ? 'var(--green)' : 'var(--blue)'
+    setBtn.textContent = 'Modifica obiettivo'
+    removeBtn.style.display = 'block'
+  } else {
+    infoEl.textContent = 'Nessun obiettivo impostato.'
+    barWrap.style.display = 'none'
+    setBtn.textContent = 'Imposta'
+    removeBtn.style.display = 'none'
+  }
+}
+
+function openPocketTargetEditor(){
+  const pocketId = document.getElementById('pocket-detail-id').value
+  const accId = document.getElementById('pockets-acc-id').value
+  const pocket = getPockets(accId).find(p=>p.id===pocketId)
+  document.getElementById('pocket-target-input').value = pocket?.targetCents ? (pocket.targetCents/100) : ''
+  document.getElementById('pocket-target-display').style.display = 'none'
+  document.getElementById('pocket-target-edit').style.display = 'block'
+  setTimeout(()=>document.getElementById('pocket-target-input').focus(), 150)
+}
+function cancelPocketTargetEditor(){
+  document.getElementById('pocket-target-edit').style.display = 'none'
+  document.getElementById('pocket-target-display').style.display = 'block'
+}
+function confirmPocketTarget(){
+  const pocketId = document.getElementById('pocket-detail-id').value
+  const accId = document.getElementById('pockets-acc-id').value
+  const pocket = getPockets(accId).find(p=>p.id===pocketId)
+  if(!pocket) return
+  const amount = parseFloat(document.getElementById('pocket-target-input').value)
+  if(!amount || amount <= 0){ showToast('⚠️ Inserisci un importo valido'); return }
+  pocket.targetCents = Math.round(amount * 100)
+  saveAccounts()
+  cancelPocketTargetEditor()
+  renderPocketTargetSection(pocket)
+  renderPocketsList()
+  showToast('🎯 Obiettivo impostato')
+}
+function removePocketTarget(){
+  const pocketId = document.getElementById('pocket-detail-id').value
+  const accId = document.getElementById('pockets-acc-id').value
+  const pocket = getPockets(accId).find(p=>p.id===pocketId)
+  if(!pocket) return
+  pocket.targetCents = null
+  saveAccounts()
+  renderPocketTargetSection(pocket)
+  renderPocketsList()
+  showToast('Obiettivo rimosso')
 }
 
 // ── RINOMINA POCKET ───────────────────────────────────────────────────────────
@@ -3191,6 +3319,113 @@ function getOverBudgetCats(ym){
       return {catId, cat:cat(catId), limitCents, spentCents, overCents:spentCents-limitCents}
     })
     .filter(x=>x.overCents>0)
+}
+
+// Come getOverBudgetCats, ma per la fascia "quasi al limite" (80-99%),
+// invece di "già sforato". Separata da getOverBudgetCats invece di un
+// unico parametro soglia, perché le due fasce vengono mostrate con toni
+// e icone diversi ovunque vengano usate (🚨 sforato, ⚠️ in avvicinamento)
+// — tenerle distinte rende più leggibile il codice di chi le consuma.
+function getApproachingBudgetCats(ym){
+  return Object.keys(CAT_BUDGETS)
+    .map(catId=>{
+      const limitCents=CAT_BUDGETS[catId]
+      const spentCents=catSpendCents(catId,ym)
+      const pct = limitCents>0 ? (spentCents/limitCents*100) : 0
+      return {catId, cat:cat(catId), limitCents, spentCents, pct}
+    })
+    .filter(x=>x.pct>=80 && x.pct<100)
+}
+
+// Restituisce le spese/entrate ricorrenti ATTIVE la cui prossima scadenza
+// cade entro i prossimi "daysAhead" giorni (oggi incluso). Il giorno
+// nominale (r.day, 1-31) viene "clampato" all'ultimo giorno reale del
+// mese quando necessario (es. day=31 in un mese di 30 giorni → 30),
+// stesso principio già usato per l'applicazione automatica mensile delle
+// ricorrenti — evitare due logiche di calcolo data leggermente diverse
+// per lo stesso concetto è quello che ha causato il bug della chiave
+// custom di Trade Republic di qualche modifica fa.
+function clampedDateForMonth(year, monthIndex, day){
+  const lastDay = new Date(year, monthIndex+1, 0).getDate()
+  return new Date(year, monthIndex, Math.min(day, lastDay))
+}
+function getUpcomingRecurring(daysAhead = 5){
+  const today = new Date()
+  today.setHours(0,0,0,0)
+  return RECURRING
+    .filter(r => r.active !== false)
+    .map(r => {
+      let due = clampedDateForMonth(today.getFullYear(), today.getMonth(), r.day)
+      if(due < today){
+        due = clampedDateForMonth(today.getFullYear(), today.getMonth()+1, r.day)
+      }
+      const daysUntil = Math.round((due - today) / 86400000)
+      return {...r, daysUntil}
+    })
+    .filter(r => r.daysUntil >= 0 && r.daysUntil <= daysAhead)
+    .sort((a,b) => a.daysUntil - b.daysUntil)
+}
+
+// Avvisi dismissabili "per questa sessione": un Set in memoria, non salvato
+// su Firestore. Scelta deliberata — è un fastidio minore se ricompare dopo
+// una chiusura completa dell'app, non un dato da sincronizzare tra
+// dispositivi o da persistere a vita. Evita scritture Firestore per
+// un'interazione così leggera.
+let _dismissedHomeAlerts = new Set()
+function dismissHomeAlert(key){
+  _dismissedHomeAlerts.add(key)
+  renderHomeAlerts()
+}
+
+// Banner proattivo in Home: budget quasi/già sforati + ricorrenti in
+// arrivo nei prossimi 5 giorni. A differenza di checkBudgetAlertAfterExpense
+// (che avvisa SUBITO dopo aver registrato una spesa, quando l'informazione
+// è più utile per decidere "vale la pena questa spesa?"), questo banner è
+// PASSIVO: si vede semplicemente aprendo l'app, anche se non hai appena
+// registrato nulla — copre il caso "ho sforato il budget ieri ma oggi non
+// ho ancora speso nulla" o "Netflix si rinnova dopodomani", che altrimenti
+// resterebbero visibili solo entrando apposta nella tab Budget o Ricorrenti.
+function renderHomeAlerts(){
+  const el = document.getElementById('home-alerts-banner')
+  if(!el) return
+
+  const ym = getCurMonth()
+  const overCats = getOverBudgetCats(ym).filter(x => !_dismissedHomeAlerts.has('budget_over_'+x.catId))
+  const nearCats = getApproachingBudgetCats(ym).filter(x => !_dismissedHomeAlerts.has('budget_near_'+x.catId))
+  const upcoming = getUpcomingRecurring(5).filter(r => !_dismissedHomeAlerts.has('recurring_'+r.id))
+
+  const items = []
+  overCats.forEach(x => items.push({
+    key: 'budget_over_'+x.catId, icon: '🚨', color: 'var(--red)',
+    text: `Hai superato il budget ${escapeHtml(x.cat.n)}: ${fmt(x.spentCents)} di ${fmt(x.limitCents)}`
+  }))
+  nearCats.forEach(x => items.push({
+    key: 'budget_near_'+x.catId, icon: '⚠️', color: 'var(--orange)',
+    text: `${escapeHtml(x.cat.n)} al ${Math.round(x.pct)}% del budget mensile`
+  }))
+  upcoming.forEach(r => items.push({
+    key: 'recurring_'+r.id, icon: '🔁', color: 'var(--blue)',
+    text: r.daysUntil===0
+      ? `${escapeHtml(r.desc)} si rinnova oggi: ${fmt(r.amountCents)}`
+      : `${escapeHtml(r.desc)} si rinnova tra ${r.daysUntil} giorno${r.daysUntil>1?'i':''}: ${fmt(r.amountCents)}`
+  }))
+
+  if(items.length === 0){
+    el.style.display = 'none'
+    el.innerHTML = ''
+    return
+  }
+
+  el.style.display = 'block'
+  el.innerHTML = items.map(it => `
+    <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;margin-bottom:8px;
+      background:var(--surface);border:1px solid var(--border2);border-radius:14px">
+      <span style="font-size:1rem;flex-shrink:0">${it.icon}</span>
+      <span style="flex:1;font-size:.82rem;color:var(--text);line-height:1.35">${it.text}</span>
+      <button onclick="dismissHomeAlert('${it.key}')" title="Nascondi"
+        style="background:none;border:none;color:var(--text3);font-size:.95rem;cursor:pointer;
+        padding:2px 4px;flex-shrink:0;line-height:1">✕</button>
+    </div>`).join('')
 }
 
 // Controlla, subito dopo l'inserimento di una nuova spesa, se quella
@@ -4075,6 +4310,12 @@ function renderHome(){
   const{inc,exp}=monthSummary(getCurMonth())
   document.getElementById('h-income').textContent=fmt(inc)
   document.getElementById('h-expense').textContent=fmt(exp)
+  // Stesso principio applicato ora anche alle ETICHETTE "Entrate/Uscite
+  // giugno": prima il nome del mese era scritto a mano nell'HTML e non
+  // veniva mai aggiornato — a dicembre avresti letto comunque "giugno".
+  const curMonthName = (MONTH_NAMES[parseInt(getCurMonth().slice(5))-1] || '').toLowerCase()
+  document.getElementById('h-income-month').textContent = curMonthName
+  document.getElementById('h-expense-month').textContent = curMonthName
 
   // conti chips
   document.getElementById('home-accounts').innerHTML=ACCOUNTS.map(a=>{
@@ -4096,6 +4337,7 @@ function renderHome(){
     </div>`}).join('')
 
   renderHomeHistory()
+  renderHomeAlerts()
 }
 
 function renderHomeHistory(){
@@ -5213,6 +5455,16 @@ async function initAppAfterLogin(){
 window.initAppAfterLogin = initAppAfterLogin
 
 // ── TRADE REPUBLIC DATA ───────────────────────────────────────────────────────
+
+// Nota: qui esisteva un'integrazione con l'API di EODHD per la ricerca
+// automatica di titoli/ETF e l'aggiornamento prezzi. Rimossa dopo un test
+// reale che ha confermato un blocco CORS lato browser (EODHD non espone
+// l'header "Access-Control-Allow-Origin", quindi nessuna chiamata diretta
+// dal client può funzionare, indipendentemente da come si gestisce la
+// chiave). Per farla funzionare servirebbe una Firebase Cloud Function da
+// usare come proxy — passo rimandato per ora, per non introdurre un
+// backend nel progetto senza necessità. L'inserimento resta manuale.
+
 const TR_ETF_META = {
   msci:   {n:'MSCI World ETF',       e:'🌍', c:'#3461ff', bg:'rgba(52,97,255,.1)'},
   sp500:  {n:'S&P 500 ETF',          e:'🇺🇸', c:'#0d9f5e', bg:'rgba(13,159,94,.1)'},
@@ -5225,46 +5477,21 @@ const TR_ETF_META = {
 // Dati demo per Trade Republic, mostrati solo al primissimo accesso di
 // un nuovo utente — esattamente lo stesso pattern di DEMO_ACCOUNTS/DEMO_TX.
 const DEMO_TR_DATA = {
-  cashCents: 84200,          // liquidità in centesimi
-  interestRate: 0.03,        // 3% annuo — tasso attuale TR per i clienti italiani (luglio 2026)
-  savebackCents: 1340,       // saveback questo mese
-  roundupCents: 430,         // round up questo mese
+  cashCents: 0,              // liquidità — parte da 0, nessuna transazione demo
+  interestRate: 0.03,        // 3% annuo — tasso attuale TR per i clienti italiani (luglio 2026); impostazione, non dato finanziario finto
+  savebackCents: 0,
+  roundupCents: 0,
   savebackOn: true,
   roundupOn: false,
   savebackMultiplier: 1,     // moltiplicatore 1x-5x
   savebackTargetEtf: 'msci', // ETF destinazione saveback
   roundupMultiplier: 1,      // moltiplicatore round up
   roundupTargetEtf: 'sp500', // ETF destinazione round up
-  savebackMultiplier: 1,     // moltiplicatore 1x-10x
-  roundupMultiplier: 1,
   savebackTarget: 'msci',    // dove investire
   roundupTarget: 'msci',
-  plans: [
-    {id:'p1', etf:'msci',   amountCents:10000, day:5,  lastAppliedYm:'2026-04'},
-    {id:'p2', etf:'sp500',  amountCents:5000,  day:5,  lastAppliedYm:'2026-04'},
-    {id:'p3', etf:'nasdaq', amountCents:5000,  day:10, lastAppliedYm:'2026-04'},
-  ],
-  assets: [
-    {id:'e1', etf:'msci',   currPriceCents:8612, lots:[
-      {shares:2.823, priceCents:7600, dt:'2026-05-05'},
-      {shares:2.000, priceCents:8120, dt:'2026-06-05'},
-    ]},
-    {id:'e2', etf:'sp500',  currPriceCents:55340, lots:[
-      {shares:2.15,  priceCents:51200, dt:'2026-06-05'},
-    ]},
-    {id:'e3', etf:'nasdaq', currPriceCents:41200, lots:[
-      {shares:1.42,  priceCents:38900, dt:'2026-06-10'},
-    ]},
-  ],
-  ops: [
-    {type:'buy',  etf:'msci',   amountCents:10000, dt:'2026-06-05', fee:100},
-    {type:'buy',  etf:'sp500',  amountCents:5000,  dt:'2026-06-05', fee:100},
-    {type:'buy',  etf:'nasdaq', amountCents:5000,  dt:'2026-06-10', fee:100},
-    {type:'int',  etf:null,     amountCents:140,   dt:'2026-06-01', fee:0},
-    {type:'buy',  etf:'msci',   amountCents:10000, dt:'2026-05-05', fee:100},
-    {type:'buy',  etf:'sp500',  amountCents:5000,  dt:'2026-05-05', fee:100},
-    {type:'saveback', etf:'msci', amountCents:670,  dt:'2026-05-12', fee:0},
-  ]
+  plans: [],                 // nessun piano di accumulo preimpostato
+  assets: [],                // nessun ETF posseduto
+  ops: [],                   // nessuno storico operazioni
 }
 // Stato reale in memoria: popolato da bootstrapUserData() dopo il login,
 // esattamente come ACCOUNTS/TX/RECURRING — parte vuoto qui per evitare
@@ -6587,6 +6814,7 @@ function closeTrSavingsSheet(){
 
 document.getElementById('tr-f-etf')?.addEventListener('change',function(){
   document.getElementById('tr-custom-group').style.display=this.value==='custom'?'block':'none'
+  document.getElementById('tr-f-custom').value=''
 })
 
 function saveTrPlan(){
@@ -6596,10 +6824,22 @@ function saveTrPlan(){
   const day=document.getElementById('tr-f-day').value
   if(!amount||amount<1){showToast('⚠️ Importo minimo €1');return}
   if(etf==='custom'&&!customName){showToast('⚠️ Inserisci un nome');return}
+
+  // "planEtfKey" è la chiave EFFETTIVAMENTE salvata nel piano — per gli ETF
+  // predefiniti è semplicemente il valore del select (es. 'msci'). Per un
+  // asset personalizzato, invece, va generata una chiave univoca e quella
+  // stessa chiave deve essere usata sia per creare la voce in TR_ETF_META
+  // sia per il piano: prima venivano create due cose scollegate (bug
+  // preesistente, corretto qui) e il nome scritto dall'utente si perdeva,
+  // il piano mostrava sempre "✏️ Personalizzato" generico invece del nome
+  // vero.
+  let planEtfKey = etf
   if(etf==='custom'){
-    TR_ETF_META['custom_'+Date.now()]={n:customName,e:'✏️',c:'#717892',bg:'rgba(107,114,128,.1)'}
+    planEtfKey = 'custom_'+Date.now()
+    TR_ETF_META[planEtfKey] = {n: customName, e:'✏️', c:'#717892', bg:'rgba(107,114,128,.1)'}
   }
-  TR_DATA.plans.push({id:'p'+Date.now(),etf,amountCents:Math.round(amount*100),day:parseInt(day)})
+
+  TR_DATA.plans.push({id:'p'+Date.now(),etf:planEtfKey,amountCents:Math.round(amount*100),day:parseInt(day)})
   saveTrData()
   document.getElementById('tr-savings-sheet').classList.remove('open')
   document.getElementById('tr-f-amount').value=''
@@ -7806,7 +8046,7 @@ function initQuickExpenseWidget() {
   fab.innerHTML = '⚡';
   fab.title = 'Spese rapide';
   fab.style.cssText = `
-    position:fixed; bottom:88px; right:16px;
+    position:fixed; bottom:calc(98px + env(safe-area-inset-bottom)); right:16px;
     width:44px; height:44px; border-radius:50%; z-index:300;
     background:var(--blue); color:#fff; font-size:1.2rem;
     box-shadow:0 4px 16px rgba(52,97,255,.45);
@@ -7824,7 +8064,7 @@ function initQuickExpenseWidget() {
   const widget = document.createElement('div');
   widget.id = 'quickExpWidget';
   widget.style.cssText = `
-    position:fixed; bottom:140px; right:12px;
+    position:fixed; bottom:calc(150px + env(safe-area-inset-bottom)); right:12px;
     width:min(300px, calc(100vw - 24px)); z-index:301;
     background:var(--surface); border:1px solid var(--border2);
     border-radius:var(--radius); box-shadow:0 8px 32px rgba(0,0,0,.18),0 2px 8px rgba(0,0,0,.1);
