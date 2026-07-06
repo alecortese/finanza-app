@@ -2465,9 +2465,13 @@ const CATS=[
   {id:'tras',  n:'Trasporti',    e:'🚗', c:'#0ea5e9', bg:'rgba(14,165,233,.12)', t:'expense'},
   {id:'svago', n:'Svago',        e:'🎮', c:'#a855f7', bg:'rgba(168,85,247,.12)', t:'expense'},
   {id:'rist',  n:'Ristoranti',   e:'🍽️', c:'#f4711a', bg:'rgba(244,113,26,.1)', t:'expense'},
+  {id:'bar',   n:'Bar',          e:'☕', c:'#a16207', bg:'rgba(161,98,7,.12)',   t:'expense'},
   {id:'abbsub',n:'Abbonamenti',  e:'📱', c:'#e63946', bg:'rgba(230,57,70,.1)',   t:'expense'},
   {id:'salut', n:'Salute',       e:'💊', c:'#e63946', bg:'rgba(230,57,70,.1)',   t:'expense'},
   {id:'shop',  n:'Shopping',     e:'🛍️', c:'#0d9f5e', bg:'rgba(13,159,94,.1)',  t:'expense'},
+  {id:'regali',n:'Regali',       e:'🎁', c:'#ec4899', bg:'rgba(236,72,153,.12)', t:'expense'},
+  {id:'viaggi',n:'Viaggi',       e:'✈️', c:'#0ea5e9', bg:'rgba(14,165,233,.12)', t:'expense'},
+  {id:'animali',n:'Animali',     e:'🐾', c:'#f59e0b', bg:'rgba(245,158,11,.12)', t:'expense'},
   {id:'stip',  n:'Stipendio',    e:'💼', c:'#0d9f5e', bg:'rgba(13,159,94,.1)',   t:'income'},
   {id:'free',  n:'Freelance',    e:'💻', c:'#3461ff', bg:'rgba(52,97,255,.1)',   t:'income'},
   {id:'inv',   n:'Investimenti', e:'📈', c:'#3461ff', bg:'rgba(52,97,255,.1)',   t:'income'},
@@ -5116,7 +5120,25 @@ function saveAccountBalances(){
     const val = parseFloat(inp.value)
     if(isNaN(val)) return
     const a = acc(accId)
-    if(a) a.bal = Math.round(val * 100) // ← invariante centesimi interi, conversione una sola volta
+    if(!a) return
+    const newBalCents = Math.round(val * 100) // ← invariante centesimi interi, conversione una sola volta
+
+    // Se il valore inserito è diverso dal saldo attuale, è una CORREZIONE
+    // manuale del saldo (es. per allinearlo all'estratto conto reale della
+    // banca) — non una transazione vera. In questo caso resettiamo anche
+    // "initialBal" allo stesso nuovo valore: è il campo che alimenta il
+    // calcolo "+X€/−X€" mostrato nella card del conto (bal - initialBal).
+    // Senza questo reset, quella variazione continuerebbe a confrontare il
+    // nuovo saldo con un punto di partenza vecchio, mischiando insieme
+    // "quanto ho guadagnato/speso per davvero nel tempo" e "quanto ho
+    // corretto a mano oggi" in un unico numero fuorviante. Se invece il
+    // valore non cambia (l'utente riapre la sheet e salva senza toccare
+    // nulla), initialBal resta quello di prima — non vogliamo azzerare una
+    // variazione storica legittima solo perché la sheet è stata riaperta.
+    if(newBalCents !== a.bal){
+      a.initialBal = newBalCents
+    }
+    a.bal = newBalCents
   })
 
   closeEditAccountsSheet()
@@ -5460,11 +5482,9 @@ const DEMO_TR_DATA = {
   savebackOn: true,
   roundupOn: false,
   savebackMultiplier: 1,     // moltiplicatore 1x-5x
-  savebackTargetEtf: 'msci', // ETF destinazione saveback
   roundupMultiplier: 1,      // moltiplicatore round up
-  roundupTargetEtf: 'sp500', // ETF destinazione round up
-  savebackTarget: 'msci',    // dove investire
-  roundupTarget: 'msci',
+  savebackTarget: 'msci',    // dove investire il saveback
+  roundupTarget: 'msci',     // dove investire il round up
   plans: [],                 // nessun piano di accumulo preimpostato
   assets: [],                // nessun ETF posseduto
   ops: [],                   // nessuno storico operazioni
@@ -6223,45 +6243,20 @@ document.addEventListener('touchstart', e=>{
 // salvataggio del moltiplicatore nel sheet VERO non funzionava più
 // correttamente a causa di questa collisione. Bug reale trovato e risolto
 // insieme alla pulizia, non solo codice morto.
-// Update renderTrToggles to show multiplier + target in description
-const _origRenderToggles = renderTrToggles
-// Wrap to also update desc lines
-function renderTrToggles(){
-  // Saveback
-  const sbToggle = document.getElementById('toggle-saveback')
-  const sbStat   = document.getElementById('tr-saveback-stat')
-  const sbDesc   = document.getElementById('tr-saveback-desc')
-  if(sbToggle){
-    sbToggle.classList.toggle('on', TR_DATA.savebackOn)
-    if(sbStat){
-      sbStat.textContent = TR_DATA.savebackOn
-        ? '✓ Attivo · +' + fmt(TR_DATA.savebackCents) + ' questo mese'
-        : 'Non attivo'
-      sbStat.className = 'tr-toggle-stat ' + (TR_DATA.savebackOn ? 'on' : 'off')
-    }
-    if(sbDesc){
-      const meta = TR_ETF_META[TR_DATA.savebackTargetEtf] || TR_ETF_META.msci
-      sbDesc.textContent = TR_DATA.savebackMultiplier + '× · → ' + meta.e + ' ' + meta.n
-    }
-  }
-  // Round Up
-  const ruToggle = document.getElementById('toggle-roundup')
-  const ruStat   = document.getElementById('tr-roundup-stat')
-  const ruDesc   = document.getElementById('tr-roundup-desc')
-  if(ruToggle){
-    ruToggle.classList.toggle('on', TR_DATA.roundupOn)
-    if(ruStat){
-      ruStat.textContent = TR_DATA.roundupOn
-        ? '✓ Attivo · +' + fmt(TR_DATA.roundupCents) + ' questo mese'
-        : 'Non attivo'
-      ruStat.className = 'tr-toggle-stat ' + (TR_DATA.roundupOn ? 'on' : 'off')
-    }
-    if(ruDesc){
-      const meta = TR_ETF_META[TR_DATA.roundupTargetEtf] || TR_ETF_META.sp500
-      ruDesc.textContent = TR_DATA.roundupMultiplier + '× · → ' + meta.e + ' ' + meta.n
-    }
-  }
-}
+// Nota: qui esisteva una SECONDA dichiarazione di renderTrToggles (con un
+// tentativo di "wrapper" via _origRenderToggles, mai richiamato). In
+// JavaScript classico, due "function nome(){}" con lo stesso nome nello
+// stesso scope non convivono: durante l'hoisting l'ultima dichiarazione in
+// ordine nel file sovrascrive le precedenti — quindi questa versione non
+// veniva MAI eseguita, era shadowata in modo silenzioso dalla versione più
+// sotto (quella vera, usata da tutto il resto dell'app). Per for tuna non
+// causava un bug visibile: leggeva un campo (savebackTargetEtf) mai scritto
+// da nessun'altra parte, e scriveva in elementi HTML (tr-saveback-desc,
+// tr-roundup-desc) che non esistono nel markup — quindi era interamente
+// inerte, non solo shadowata. Rimossa per pulizia, stesso principio del
+// bug selectMultiplier corretto poco sopra: due dichiarazioni con lo
+// stesso nome sono sempre un rischio, anche quando per coincidenza non
+// causano un malfunzionamento visibile.
 
 // ── TR ASSET MANAGEMENT ───────────────────────────────────────────────────────
 function openTrAssetSheet(editId){
