@@ -856,6 +856,19 @@ button[onclick="rndExportPrint()"]:hover{background:#3730a3!important}
 </style>
 </head>
 <body>
+<script>
+// Applica il tema salvato PRIMA che il resto della pagina sia visibile —
+// se questo script fosse più in basso, o dentro il blocco di script
+// principale (caricato ed eseguito molto dopo), l'utente vedrebbe un
+// lampo di tema chiaro per una frazione di secondo prima che scatti quello
+// scuro. Usiamo localStorage (non Firestore) apposta: deve essere
+// disponibile ISTANTANEAMENTE, senza aspettare che Firebase Auth verifichi
+// chi sei — il tema è una preferenza puramente estetica, non un dato
+// finanziario da sincronizzare tra dispositivi.
+if(localStorage.getItem('finapp-theme') === 'dark'){
+  document.body.classList.add('dark')
+}
+</script>
 
 <!-- ══════════════ SCHERMATA DI LOGIN ══════════════ -->
 <div id="auth-screen" style="position:fixed;inset:0;background:var(--bg);z-index:1000;
@@ -2381,6 +2394,15 @@ onAuthStateChanged(auth, async (user) => {
 </script>
 
 <script>
+// Sincronizza l'icona del bottone tema con lo stato già applicato al body
+// dallo script inline in cima alla pagina (quello che legge localStorage
+// prima che qualunque contenuto sia visibile). Senza questa riga, il
+// bottone mostrerebbe sempre 🌙 anche a tema scuro già attivo dal
+// caricamento — l'icona si aggiornava solo al PRIMO click, mai prima.
+if(document.body.classList.contains('dark')){
+  document.getElementById('dark-btn').textContent = '☀️'
+}
+
 // Piccola utility: attende che una funzione globale (definita più sotto
 // in questo stesso script) sia disponibile, con un timeout ragionevole.
 // Serve solo come guardia contro un ordine di esecuzione sfortunato.
@@ -2472,6 +2494,8 @@ const CATS=[
   {id:'regali',n:'Regali',       e:'🎁', c:'#ec4899', bg:'rgba(236,72,153,.12)', t:'expense'},
   {id:'viaggi',n:'Viaggi',       e:'✈️', c:'#0ea5e9', bg:'rgba(14,165,233,.12)', t:'expense'},
   {id:'animali',n:'Animali',     e:'🐾', c:'#f59e0b', bg:'rgba(245,158,11,.12)', t:'expense'},
+  {id:'cura',  n:'Cura personale', e:'💇', c:'#ec4899', bg:'rgba(236,72,153,.12)', t:'expense'},
+  {id:'istr',  n:'Istruzione',   e:'📚', c:'#3461ff', bg:'rgba(52,97,255,.1)',   t:'expense'},
   {id:'stip',  n:'Stipendio',    e:'💼', c:'#0d9f5e', bg:'rgba(13,159,94,.1)',   t:'income'},
   {id:'free',  n:'Freelance',    e:'💻', c:'#3461ff', bg:'rgba(52,97,255,.1)',   t:'income'},
   {id:'inv',   n:'Investimenti', e:'📈', c:'#3461ff', bg:'rgba(52,97,255,.1)',   t:'income'},
@@ -3928,6 +3952,18 @@ function processRecurringTransactions(){
         // hai anticipato per altri e che ti aspetti rientri.
         const personalCostCents = r.amountCents - (r.sharedCostCents || 0)
 
+        // Se NON c'è un Pocket coinvolto, il movimento tocca direttamente
+        // il saldo del conto — stesso principio ora applicato a tutte le
+        // transazioni manuali (creazione, modifica, cancellazione, spese
+        // rapide): prima, una ricorrente senza Pocket veniva registrata
+        // nello Storico e contata nei totali mensili, ma il saldo del
+        // conto non si muoveva mai automaticamente al rinnovo. Solo la
+        // QUOTA PERSONALE viene scalata (non l'intero importo), coerente
+        // con quanto la transazione stessa registra.
+        if(!r.pocketId){
+          adjustAccountBalance(r.acc, r.type==='expense' ? -personalCostCents : personalCostCents)
+        }
+
         TX.unshift({
           id: genId('tx'),
           t: r.type,
@@ -4889,7 +4925,12 @@ function updateQuickExpFabVisibility(activeTabName){
 // ── DARK MODE ─────────────────────────────────────────────────────────────────
 function toggleDark(){
   document.body.classList.toggle('dark')
-  document.getElementById('dark-btn').textContent=document.body.classList.contains('dark')?'☀️':'🌙'
+  const isDark = document.body.classList.contains('dark')
+  document.getElementById('dark-btn').textContent = isDark ? '☀️' : '🌙'
+  // Salva la preferenza: senza questa riga, il tema si perdeva ad ogni
+  // refresh perché toggleDark() cambiava solo la classe CSS del momento,
+  // senza persistere la scelta da nessuna parte.
+  localStorage.setItem('finapp-theme', isDark ? 'dark' : 'light')
 
   // I canvas dei grafici vengono disegnati con colori statici (testo/griglia)
   // calcolati al momento del render: se l'utente cambia tema mentre è sulla tab
@@ -5273,38 +5314,31 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
       const newPocketId = document.getElementById('rt-pocket-select').value || null
       const newAmountCents = Math.round(amount*100)
 
-      // 1) Se la transazione aveva già un movimento su un Pocket, lo
-      // invertiamo SEMPRE per primo, usando i valori originali (conto,
-      // importo, tipo, pocket) — esattamente come fa la cancellazione.
-      // Farlo sempre, anche se il Pocket scelto resta lo stesso, evita
-      // di dover calcolare un delta caso per caso (importo cambiato? conto
-      // cambiato? pocket cambiato? tipo cambiato?): annullare il vecchio
-      // e poi, se serve, riapplicare il nuovo è più semplice e sicuro che
-      // provare a "correggere" il movimento esistente.
-      if(originalTx.pocketId && !revertPocketEffectOfTx(originalTx)){
-        // Non dovrebbe quasi mai succedere (il revert restituisce sempre
-        // soldi al Pocket, non li toglie), ma se capitasse non procediamo
-        // affatto: niente viene toccato, né i saldi né la transazione,
-        // per non salvare uno stato a metà tra vecchio e nuovo movimento.
+      // 1) Invertiamo SEMPRE l'effetto della vecchia transazione sul saldo
+      // — sia che fosse legata a un Pocket, sia che toccasse direttamente
+      // il conto (prima, questo secondo caso non veniva gestito affatto:
+      // modificare una spesa "semplice" lasciava il saldo del conto intatto
+      // anche cambiando importo/conto/tipo). Farlo sempre, anche se i
+      // valori restano identici, evita di dover calcolare un delta caso
+      // per caso: annullare il vecchio e poi riapplicare il nuovo è più
+      // semplice e sicuro che provare a "correggere" il movimento esistente.
+      if(!revertTxBalanceEffect(originalTx)){
         showToast('⚠️ Impossibile aggiornare il Pocket collegato — modifica annullata')
         return
       }
 
-      // 2) Se dopo la modifica la transazione ha un Pocket impostato
-      // (lo stesso di prima, uno diverso, o uno nuovo che prima non c'era),
-      // applichiamo il movimento corrispondente con i valori NUOVI.
-      if(newPocketId){
-        const movementType = _type==='expense' ? 'expense' : 'refund'
-        const deltaCents = _type==='expense' ? -newAmountCents : newAmountCents
-        if(!adjustPocketBalance(accId, newPocketId, deltaCents, movementType, desc)){
-          // Il vecchio movimento è già stato annullato al passo 1: se
-          // qui falliamo, ripristiniamo subito quello vecchio per non
-          // lasciare il Pocket "a metà" — né il vecchio movimento né il
-          // nuovo, semplicemente sparito.
-          if(originalTx.pocketId) reapplyPocketEffectOfTx(originalTx)
-          showToast('⚠️ Saldo Pocket insufficiente per il nuovo importo — modifica annullata')
-          return
-        }
+      // 2) Applichiamo il nuovo movimento con i valori aggiornati — sul
+      // Pocket se ne è stato scelto uno, altrimenti direttamente sul conto
+      // (nuovo comportamento: prima solo il ramo Pocket veniva applicato).
+      const newTxForBalance = {t:_type, acc:accId, a:newAmountCents, pocketId:newPocketId, d:desc}
+      if(!reapplyTxBalanceEffect(newTxForBalance)){
+        // Il vecchio movimento è già stato annullato al passo 1: se
+        // qui falliamo, ripristiniamo subito quello vecchio per non
+        // lasciare il Pocket "a metà" — né il vecchio movimento né il
+        // nuovo, semplicemente sparito.
+        reapplyTxBalanceEffect(originalTx)
+        showToast('⚠️ Saldo Pocket insufficiente per il nuovo importo — modifica annullata')
+        return
       }
 
       // nota: Firestore non accetta MAI il valore `undefined` in un campo
@@ -5326,23 +5360,19 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
     // pagate da Pocket senza alcun collegamento reale al saldo.
     const pocketId = document.getElementById('rt-pocket-select').value || null
 
-    // Applichiamo SUBITO il movimento sul Pocket per questa transazione,
-    // sia che diventi ricorrente sia che resti singola: chi paga da un
-    // Pocket si aspetta che il saldo si muova ORA, non al primo rinnovo
-    // mensile futuro. Solo le spese ('expense') e le entrate ('income')
-    // hanno senso qui — un trasferimento non passa da questo form.
-    // type 'expense' scala sia il Pocket sia (con la fix di adjustPocketBalance)
-    // il saldo reale del conto; type 'refund' fa l'opposto per un'entrata
-    // accreditata sul Pocket (es. un rimborso che decidi di incassare lì).
-    let pocketMoveOk = true
-    if(pocketId){
-      const movementType = _type==='expense' ? 'expense' : 'refund'
-      const deltaCents = _type==='expense' ? -amountCents : amountCents
-      pocketMoveOk = adjustPocketBalance(accId, pocketId, deltaCents, movementType, desc)
-      if(!pocketMoveOk){
-        showToast('⚠️ Saldo Pocket insufficiente per questa spesa')
-        return // non salviamo nulla: né TX né ricorrente, l'utente corregge e riprova
-      }
+    // Applichiamo SUBITO il movimento sul saldo per questa transazione —
+    // sul Pocket se ne è stato scelto uno (che aggiorna anche il conto
+    // reale collegato), altrimenti DIRETTAMENTE sul conto. Prima, una
+    // spesa/entrata senza Pocket non toccava mai il saldo del conto — era
+    // registrata nello Storico e contata nei totali mensili, ma il saldo
+    // mostrato in Home/Conti restava fermo. Corretto qui, riusando la
+    // stessa funzione centralizzata usata da modifica/cancellazione,
+    // invece di ripetere la logica una terza volta.
+    const newTxForBalance = {t:_type, acc:accId, a:amountCents, pocketId, d:desc}
+    const pocketMoveOk = reapplyTxBalanceEffect(newTxForBalance)
+    if(!pocketMoveOk){
+      showToast('⚠️ Saldo Pocket insufficiente per questa spesa')
+      return // non salviamo nulla: né TX né ricorrente, l'utente corregge e riprova
     }
 
     TX.unshift({
@@ -5946,6 +5976,48 @@ let _deletedIdx=null     // posizione originale nell'array
 let _deletedRecurring=null
 let _deletedRecurringIdx=null
 
+// ── EFFETTO DI UNA TRANSAZIONE SUL SALDO CONTO — QUALSIASI TIPO ────────────
+// Prima di questa correzione, SOLO le transazioni collegate a un Pocket
+// aggiornavano il saldo reale del conto (tramite adjustPocketBalance) — una
+// spesa "semplice" (senza Pocket) veniva registrata nello Storico e contata
+// nei totali mensili, ma il saldo del conto non si muoveva mai, né alla
+// creazione né alla cancellazione. Queste due funzioni centralizzano la
+// regola per QUALSIASI transazione — spesa, entrata, trasferimento, con o
+// senza Pocket — in un solo posto, così la stessa logica serve sia per
+// eliminare/ripristinare una transazione sia per il primo passo di una
+// modifica (revert del vecchio stato prima di applicare il nuovo). Tenerla
+// in un solo posto, invece di ripeterla in ogni chiamante, è esattamente
+// il principio che ha evitato il bug di selectMultiplier/renderTrToggles
+// visto poco fa: una sola definizione, mai due copie che possono divergere.
+//
+// Ritornano false solo se un Pocket coinvolto non ha fondi sufficienti per
+// il movimento inverso — una spesa/entrata diretta sul conto non fallisce
+// mai (un conto può sempre andare in negativo, a differenza di un Pocket).
+function revertTxBalanceEffect(tx){
+  if(tx.pocketId) return revertPocketEffectOfTx(tx) // già gestisce anche il saldo conto
+  if(tx.t === 'expense'){
+    adjustAccountBalance(tx.acc, tx.a) // restituisce l'importo che era stato speso
+  } else if(tx.t === 'income'){
+    adjustAccountBalance(tx.acc, -tx.a) // toglie l'importo che era stato accreditato
+  } else if(tx.t === 'transfer'){
+    adjustAccountBalance(tx.acc, tx.a)        // rimette sul conto di origine
+    adjustAccountBalance(tx.toAcc, -tx.a)     // toglie dal conto di destinazione
+  }
+  return true
+}
+function reapplyTxBalanceEffect(tx){
+  if(tx.pocketId) return reapplyPocketEffectOfTx(tx)
+  if(tx.t === 'expense'){
+    adjustAccountBalance(tx.acc, -tx.a)
+  } else if(tx.t === 'income'){
+    adjustAccountBalance(tx.acc, tx.a)
+  } else if(tx.t === 'transfer'){
+    adjustAccountBalance(tx.acc, -tx.a)
+    adjustAccountBalance(tx.toAcc, tx.a)
+  }
+  return true
+}
+
 function deleteTx(id){
   // Salva la transazione per eventuale undo
   const idx=TX.findIndex(t=>String(t.id)===String(id))
@@ -5953,15 +6025,13 @@ function deleteTx(id){
   _deletedTx={...TX[idx]}
   _deletedIdx=idx
 
-  // Se questa transazione era stata pagata da (o accreditata su) un
-  // Pocket, eliminarla deve restituire/togliere quei soldi: altrimenti
-  // il Pocket — e il saldo reale del conto, che gli è collegato — resta
-  // alterato per sempre anche se la transazione che lo aveva mosso non
-  // esiste più. Stesso principio già applicato alla creazione, qui
-  // applicato in senso inverso.
-  let pocketRevertFailed=false
+  // Qualunque transazione (spesa, entrata, trasferimento — con o senza
+  // Pocket) deve restituire/togliere il suo effetto sul saldo quando viene
+  // eliminata: altrimenti il conto resta alterato per sempre anche se la
+  // transazione che lo aveva mosso non esiste più. Prima questo accadeva
+  // SOLO per le transazioni con Pocket; ora vale per tutte.
+  let pocketRevertFailed = !revertTxBalanceEffect(_deletedTx)
   if(_deletedTx.pocketId){
-    pocketRevertFailed = !revertPocketEffectOfTx(_deletedTx)
     // Aggiorna anche il dettaglio Pocket se è la vista attualmente aperta
     // (se non lo è, ridisegnarla non avrebbe comunque effetto visibile,
     // e leggere l'account da un campo non ancora inizializzato sarebbe
@@ -6030,14 +6100,14 @@ function undoDelete(){
   const insertAt=Math.min(_deletedIdx, TX.length)
   TX.splice(insertAt, 0, _deletedTx)
 
-  // Rifà il movimento sul Pocket esattamente come al momento della
-  // creazione originale — se il Pocket non ha più fondi sufficienti
-  // (es. nel frattempo è stato usato per pagare altro), lo segnaliamo:
-  // la transazione torna comunque visibile nello storico, ma il saldo
-  // Pocket potrebbe non essere più perfettamente coerente con essa.
-  let pocketReapplyFailed=false
+  // Rifà l'effetto sul saldo esattamente come al momento della creazione
+  // originale — per qualunque transazione, non solo quelle con Pocket. Se
+  // un Pocket coinvolto non ha più fondi sufficienti (es. nel frattempo è
+  // stato usato per pagare altro), lo segnaliamo: la transazione torna
+  // comunque visibile nello storico, ma il saldo Pocket potrebbe non
+  // essere più perfettamente coerente con essa.
+  let pocketReapplyFailed = !reapplyTxBalanceEffect(_deletedTx)
   if(_deletedTx.pocketId){
-    pocketReapplyFailed = !reapplyPocketEffectOfTx(_deletedTx)
     const pocketsSheet=document.getElementById('pockets-list-sheet')
     if(pocketsSheet && pocketsSheet.classList.contains('open')) renderPocketsList()
   }
@@ -7914,10 +7984,10 @@ function saveQuickExpenses(list) {
 }
 function defaultQuickExpenses() {
   return [
-    { id: 1, emoji: '☕', label: 'Bar',    amountCents: 150,  cat: 'bar',   acc: 'portafoglio', type: 'expense' },
-    { id: 2, emoji: '🍕', label: 'Pranzo', amountCents: 800,  cat: 'rist',  acc: 'portafoglio', type: 'expense' },
-    { id: 3, emoji: '🚌', label: 'Bus',    amountCents: 150,  cat: 'tras',  acc: 'portafoglio', type: 'expense' },
-    { id: 4, emoji: '🛒', label: 'Spesa',  amountCents: 1500, cat: 'alim',  acc: 'casa',        type: 'expense' },
+    { id: 1, emoji: '☕', label: 'Bar',    amountCents: 150,  cat: 'bar',   acc: 'a3', type: 'expense' },
+    { id: 2, emoji: '🍕', label: 'Pranzo', amountCents: 800,  cat: 'rist',  acc: 'a3', type: 'expense' },
+    { id: 3, emoji: '🚌', label: 'Bus',    amountCents: 150,  cat: 'tras',  acc: 'a3', type: 'expense' },
+    { id: 4, emoji: '🛒', label: 'Spesa',  amountCents: 1500, cat: 'alim',  acc: 'a1', type: 'expense' },
   ];
 }
 
@@ -8025,13 +8095,24 @@ function addQuickExpense(id) {
   const it = items.find(i => i.id === id);
   if (!it) return;
   const today = new Date().toISOString().slice(0,10);
+  const accId = it.acc || ACCOUNTS[0].id
+  const type = it.type || 'expense'
+
+  // Applichiamo subito il movimento sul saldo del conto — prima le spese
+  // rapide venivano registrate nello Storico (quindi contate nei totali
+  // mensili) ma non toccavano mai il saldo reale del conto, esattamente
+  // lo stesso bug corretto per il resto delle transazioni sopra. Le spese
+  // rapide non offrono la scelta di un Pocket (sono pensate per essere
+  // istantanee), quindi qui è sempre un movimento diretto sul conto.
+  adjustAccountBalance(accId, type==='expense' ? -it.amountCents : it.amountCents)
+
   // Invariante centesimi interi — amountCents è già in centesimi
   TX.unshift({
     id:  Date.now(),
-    t:   it.type || 'expense',
+    t:   type,
     d:   it.emoji + ' ' + it.label,
     cat: it.cat,
-    acc: it.acc || ACCOUNTS[0].id,
+    acc: accId,
     a:   it.amountCents,  // ← centesimi interi, nessuna aritmetica float
     dt:  today
   });
@@ -8039,7 +8120,7 @@ function addQuickExpense(id) {
   renderHome();
   renderTxTab();
   showToast('⚡ ' + it.label + ' −' + fmt(it.amountCents) + ' aggiunta');
-  if((it.type||'expense')==='expense'){
+  if(type==='expense'){
     setTimeout(()=>checkBudgetAlertAfterExpense(it.cat), 2700)
   }
 
