@@ -3721,7 +3721,16 @@ function clampDayToMonth(nominalDay, year, month){
   return Math.min(nominalDay, lastDayOfMonth(year, month))
 }
 
-function addRecurring({desc, amountCents, type, catId, accId, day, pocketId, sharedCostCents, refundTiming}){
+// txYm (opzionale): mese "YYYY-MM" della transazione da cui nasce questa
+// ricorrente. Se assente, si usa il mese odierno reale (comportamento di
+// sicurezza per eventuali chiamate future senza contesto di data) — ma
+// entrambi i punti dell'app che chiamano addRecurring() lo passano SEMPRE,
+// derivandolo dalla data scelta dall'utente nel form. Senza questo
+// parametro, una ricorrente creata su una transazione RETROATTIVA (es.
+// inserita oggi ma datata marzo) partirebbe dal mese di oggi invece che da
+// marzo, e il catch-up salterebbe tutti i mesi intermedi già passati.
+function addRecurring({desc, amountCents, type, catId, accId, day, pocketId, sharedCostCents, refundTiming, txYm}){
+  const originYm = txYm || getCurMonth()
   const r = {
     id: genId('rec'),
     desc, amountCents, type, // 'expense' | 'income'
@@ -3752,8 +3761,8 @@ function addRecurring({desc, amountCents, type, catId, accId, day, pocketId, sha
     advanceBalanceCents: 0,
     day,              // giorno nominale 1-31, dedotto dalla data di creazione
     active: true,
-    createdYm: getCurMonth(), // non generiamo mai un'occorrenza per il mese di creazione: quella è già stata inserita manualmente dall'utente
-    lastAppliedYm: getCurMonth()
+    createdYm: originYm, // non generiamo mai un'occorrenza per il mese della transazione di origine: quella è già stata inserita manualmente dall'utente
+    lastAppliedYm: originYm // <-- FIX: prima era getCurMonth(), rompendo il catch-up per transazioni retroattive
   }
   RECURRING.push(r)
   saveRecurring()
@@ -3878,6 +3887,35 @@ function monthsBetween(fromYm, toYm){
     result.push(y+'-'+String(m).padStart(2,'0'))
   }
   return result
+}
+
+// Anteprima "a sola lettura" del catch-up per UNA singola ricorrente: NON
+// tocca saldi, TX o RECURRING — replica solo la stessa logica di selezione
+// mesi/idempotenza di processRecurringTransactions() per calcolare COSA
+// verrebbe generato, senza generarlo. Usata subito dopo la creazione di una
+// ricorrente da una transazione retroattiva, per mostrare all'utente
+// l'impatto reale (mesi + importo totale) PRIMA di muovere i saldi — rete di
+// sicurezza contro doppi conteggi nel caso in cui il saldo del conto sia già
+// stato corretto a mano nel frattempo per coprire quelle stesse spese passate.
+function previewRecurringCatchUp(r){
+  const curYm = getCurMonth()
+  const todayDate = new Date()
+  const monthsToCheck = monthsBetween(r.lastAppliedYm, curYm)
+  const months = []
+  let totalCents = 0
+  monthsToCheck.forEach(ym=>{
+    const [y,m]=ym.split('-').map(Number)
+    const dueDay = clampDayToMonth(r.day, y, m)
+    const dueDate = new Date(y, m-1, dueDay)
+    const isCurrentMonth = ym===curYm
+    if(isCurrentMonth && dueDate>todayDate) return
+    const alreadyExists = TX.some(t=>t.recurringId===r.id && t.dt.startsWith(ym))
+    if(alreadyExists) return
+    months.push(ym)
+    const personalCostCents = r.type==='transfer' ? r.amountCents : (r.amountCents - (r.sharedCostCents||0))
+    totalCents += personalCostCents
+  })
+  return {months, totalCents}
 }
 
 // Punto di ingresso chiamato ad ogni avvio dell'app: per ogni ricorrente
@@ -5282,16 +5320,49 @@ function saveTransfer(){
 
   if(_isTransferRecurringFlag){
     const dayOfMonth=parseInt(date.split('-')[2],10)
-    addRecurring({
+    const txYm=date.slice(0,7) // "YYYY-MM" del trasferimento appena inserito (può essere un mese passato)
+    const newRec = addRecurring({
       desc: note||`${fromAcc.n} → ${toAcc.n}`,
       amountCents: amtCents,
       type: 'transfer',   // ramo distinto per generare TX transfer, non expense/income
       catId: 'altro',
       accId: fromId,
       toAccId: toId,      // campo extra: destinazione del trasferimento
-      day: dayOfMonth
+      day: dayOfMonth,
+      txYm
     })
-    showToast(`⇄ ${fmt(amtCents)} ${fromAcc.n}→${toAcc.n} — resa ricorrente 🔁`)
+    // Stessa rete di sicurezza della spesa/entrata ricorrente sopra: se il
+    // recupero riguarda più di 1 mese, conferma esplicita prima di muovere
+    // i saldi due volte per errore.
+    const preview = previewRecurringCatchUp(newRec)
+    let catchUpCount = 0
+    if(preview.months.length > 1){
+      const ok = confirm(
+        '🔁 Questo trasferimento ricorrente ha '+preview.months.length+' mesi arretrati da recuperare\n'+
+        '('+preview.months[0]+' → '+preview.months[preview.months.length-1]+'), per un totale di '+
+        fmt(preview.totalCents)+' che verranno spostati tra i conti.\n\n'+
+        'Conferma SOLO se i saldi non includono già questi trasferimenti passati.'
+      )
+      if(ok){
+        catchUpCount = processRecurringTransactions()
+      } else {
+        newRec.lastAppliedYm = getCurMonth()
+        saveRecurring()
+      }
+    } else {
+      catchUpCount = processRecurringTransactions()
+    }
+    // I render sopra (righe 5288-5290) sono già passati PRIMA del catch-up:
+    // se sono stati recuperati mesi arretrati, saldi/Storico devono essere
+    // ridisegnati di nuovo per mostrarli senza dover ricaricare la pagina.
+    if(catchUpCount>0){
+      renderHome()
+      renderTxTab()
+      renderAccountsTab()
+    }
+    showToast(catchUpCount>0
+      ? `⇄ ${fmt(amtCents)} ${fromAcc.n}→${toAcc.n} — resa ricorrente 🔁, recuperati ${catchUpCount} mesi arretrati`
+      : `⇄ ${fmt(amtCents)} ${fromAcc.n}→${toAcc.n} — resa ricorrente 🔁`)
   } else {
     showToast(`⇄ ${fmt(amtCents)} da ${fromAcc.n} a ${toAcc.n}`)
   }
@@ -5385,16 +5456,50 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
     // diventa il "template" per tutte le occorrenze future.
     if(_isRecurringFlag){
       const dayOfMonth=parseInt(date.split('-')[2],10)
+      const txYm=date.slice(0,7) // "YYYY-MM" della transazione appena inserita (può essere un mese passato)
       const sharedCostVal=parseFloat(document.getElementById('rt-shared-cost').value)
       const sharedCostCents=(pocketId && sharedCostVal>0) ? Math.round(sharedCostVal*100) : 0
-      addRecurring({
+      const newRec = addRecurring({
         desc, amountCents, type:_type,
         catId, accId, day:dayOfMonth, pocketId, sharedCostCents,
-        refundTiming: _rtRefundTiming
+        refundTiming: _rtRefundTiming, txYm
       })
+      // Se la transazione è retroattiva (es. inserita oggi ma datata marzo),
+      // qui recuperiamo SUBITO tutte le occorrenze mensili mancanti fino ad
+      // oggi, invece di aspettare il prossimo riavvio dell'app — così i mesi
+      // arretrati compaiono immediatamente nello Storico e nei saldi.
+      // Se il recupero riguarda PIÙ DI 1 mese, chiediamo prima conferma
+      // esplicita mostrando l'impatto reale sul saldo: rete di sicurezza nel
+      // caso il saldo del conto fosse già stato corretto a mano nel
+      // frattempo per coprire proprio queste spese/entrate passate (in tal
+      // caso applicarle di nuovo le scalerebbe due volte).
+      const preview = previewRecurringCatchUp(newRec)
+      let catchUpCount = 0
+      if(preview.months.length > 1){
+        const ok = confirm(
+          '🔁 Questa ricorrente ha '+preview.months.length+' mesi arretrati da recuperare\n'+
+          '('+preview.months[0]+' → '+preview.months[preview.months.length-1]+'), per un totale di '+
+          fmt(preview.totalCents)+' che verranno scalati/accreditati sul saldo.\n\n'+
+          'Conferma SOLO se il saldo del conto non include già queste spese/entrate passate.'
+        )
+        if(ok){
+          catchUpCount = processRecurringTransactions()
+        } else {
+          // Recupero annullato: la ricorrente resta attiva ma parte "pulita"
+          // da oggi in poi — i mesi passati NON vengono toccati, così i
+          // saldi restano esattamente come sono ora. L'utente potrà comunque
+          // inserirli a mano singolarmente se vuole tracciarli nello Storico.
+          newRec.lastAppliedYm = getCurMonth()
+          saveRecurring()
+        }
+      } else {
+        catchUpCount = processRecurringTransactions()
+      }
       showToast(sharedCostCents>0
         ? '✅ "'+desc+'" salvata — tua quota: '+fmt(amountCents-sharedCostCents)+'/mese'
-        : '✅ "'+desc+'" salvata e resa ricorrente 🔁')
+        : catchUpCount>0
+          ? '✅ "'+desc+'" resa ricorrente 🔁 — recuperate '+catchUpCount+' occorrenze arretrate'
+          : '✅ "'+desc+'" salvata e resa ricorrente 🔁')
     } else {
       showToast(pocketId ? '✅ "'+desc+'" pagata dal Pocket!' : '✅ "'+desc+'" salvata!')
     }
