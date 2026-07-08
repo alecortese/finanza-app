@@ -434,6 +434,11 @@ body.dark .toast-undo{
 .tr-plan-del{background:none;border:none;color:var(--text3);font-size:.8rem;
   cursor:pointer;padding:4px 6px;border-radius:6px;transition:all .12s}
 .tr-plan-del:hover{background:var(--red-bg);color:var(--red)}
+.tr-op-del-btn{width:28px;height:28px;border-radius:50%;border:none;background:var(--red-bg);
+  color:var(--red);font-size:.78rem;font-weight:900;cursor:pointer;display:flex;
+  align-items:center;justify-content:center;margin-left:8px;flex-shrink:0;transition:all .15s}
+.tr-op-del-btn:active{transform:scale(.88)}
+.tr-op-del-btn:hover{background:var(--red);color:#fff}
 
 /* ── TR TOGGLE ROWS ───────────────────────────────────────────── */
 .tr-toggle-row{display:flex;align-items:center;gap:12px;padding:14px 16px;
@@ -5653,6 +5658,18 @@ const DEMO_TR_DATA = {
 let TR_DATA = structuredClone(DEMO_TR_DATA)
 function saveTrData(){ fsSave('trData', TR_DATA) }
 
+function trEnsureOpIds(){
+  if(!Array.isArray(TR_DATA.ops)) TR_DATA.ops = []
+  let changed = false
+  TR_DATA.ops.forEach(op=>{
+    if(!op.id){
+      op.id = genId('op')
+      changed = true
+    }
+  })
+  if(changed) saveTrData()
+}
+
 // ── TR CALCOLI ────────────────────────────────────────────────────────────────
 // ── TR LOTTI (FIFO) ──────────────────────────────────────────────────────────
 // Ogni asset possiede una lista di LOTTI distinti: ogni acquisto (manuale,
@@ -5725,6 +5742,118 @@ function trAddLotToAsset(etfId, shares, priceCents, dt){
   return { asset, isNewEtf }
 }
 
+function trRemoveInvestmentLot(op){
+  const asset = TR_DATA.assets.find(a=>a.etf===op.etf)
+  if(!asset) return false
+  const lots = trEnsureLots(asset)
+  let sharesToRemove = op.shares || 0
+  const priceCents = op.priceCents || null
+
+  if(!sharesToRemove && priceCents){
+    sharesToRemove = Math.round(Math.abs(op.amountCents) / priceCents * 1000) / 1000
+  }
+  if(!sharesToRemove){
+    const reversedLots = [...lots].reverse()
+    const match = reversedLots.find(l =>
+      (!op.dt || l.dt===op.dt) &&
+      Math.abs(Math.round(l.shares*l.priceCents) - Math.abs(op.amountCents)) <= 1
+    ) || reversedLots.find(l =>
+      Math.abs(Math.round(l.shares*l.priceCents) - Math.abs(op.amountCents)) <= 1
+    ) || reversedLots[0]
+    if(match) sharesToRemove = match.shares
+  }
+  if(!sharesToRemove) return false
+
+  let remaining = sharesToRemove
+  for(let i=lots.length-1; i>=0 && remaining>0.0001; i--){
+    const lot = lots[i]
+    const sameDate = !op.dt || lot.dt===op.dt || !op.shares
+    const samePrice = !priceCents || lot.priceCents===priceCents
+    if(!sameDate || !samePrice) continue
+    const take = Math.min(lot.shares, remaining)
+    lot.shares = Math.round((lot.shares - take) * 1000) / 1000
+    remaining = Math.round((remaining - take) * 1000) / 1000
+    if(lot.shares<=0.0001) lots.splice(i,1)
+  }
+  if(remaining>0.0001) return false
+  if(trAssetShares(asset)<=0.0001){
+    TR_DATA.assets = TR_DATA.assets.filter(a=>a!==asset)
+  }
+  return true
+}
+
+function trRestoreSoldLots(op){
+  const lotsToRestore = Array.isArray(op.consumedLots) ? op.consumedLots : []
+  if(!lotsToRestore.length) return false
+  let asset = TR_DATA.assets.find(a=>a.etf===op.etf)
+  if(!asset){
+    asset = op.assetSnapshotBefore
+      ? JSON.parse(JSON.stringify(op.assetSnapshotBefore))
+      : { id: op.assetId || genId('e'), etf: op.etf, currPriceCents: op.priceCents || 10000, lots: [] }
+    asset.lots = []
+    TR_DATA.assets.push(asset)
+  }
+  trEnsureLots(asset).push(...lotsToRestore.map(l=>({...l})))
+  asset.lots.sort((a,b)=>(a.dt||'').localeCompare(b.dt||''))
+  return true
+}
+
+function trRevertOpEffect(op){
+  const fee = op.fee || 0
+  if(op.type==='int'){
+    TR_DATA.cashCents -= op.amountCents
+    return true
+  }
+  if(op.type==='sell'){
+    TR_DATA.cashCents -= (op.amountCents - fee)
+    trRestoreSoldLots(op)
+    return true
+  }
+  if(op.type==='manual' && op.assetSnapshotBefore){
+    const idx = TR_DATA.assets.findIndex(a=>a.id===op.assetSnapshotBefore.id)
+    if(idx===-1) TR_DATA.assets.push(JSON.parse(JSON.stringify(op.assetSnapshotBefore)))
+    else TR_DATA.assets[idx] = JSON.parse(JSON.stringify(op.assetSnapshotBefore))
+    TR_DATA.cashCents += op.amountCents + fee
+    return true
+  }
+  if(op.type==='manual' && op.amountCents<0){
+    TR_DATA.cashCents += op.amountCents + fee
+    return true
+  }
+  if(['buy','manual','roundup','saveback'].includes(op.type)){
+    trRemoveInvestmentLot(op)
+    if(op.type==='saveback') TR_DATA.cashCents += fee
+    else TR_DATA.cashCents += op.amountCents + fee
+    return true
+  }
+  return false
+}
+
+let _deletedTrDataSnapshot = null
+function deleteTrOp(id){
+  trEnsureOpIds()
+  const idx = TR_DATA.ops.findIndex(op=>op.id===id)
+  if(idx===-1) return
+  _deletedTrDataSnapshot = JSON.parse(JSON.stringify(TR_DATA))
+  const op = TR_DATA.ops[idx]
+  trRevertOpEffect(op)
+  TR_DATA.ops.splice(idx,1)
+  saveTrData()
+  renderTR()
+  showToast('🗑 Operazione Trade Republic eliminata', true, undoDeleteTrOp)
+}
+
+function undoDeleteTrOp(){
+  if(!_deletedTrDataSnapshot) return
+  TR_DATA = JSON.parse(JSON.stringify(_deletedTrDataSnapshot))
+  _deletedTrDataSnapshot = null
+  saveTrData()
+  if(_toastTimer) clearTimeout(_toastTimer)
+  document.getElementById('toast').classList.remove('show')
+  renderTR()
+  showToast('↩️ Operazione ripristinata')
+}
+
 const TR_BUY_FEE_CENTS = 100 // commissione fissa — si applica una sola volta, alla primissima apparizione di un ETF nel portafoglio
 
 // Esegue automaticamente i piani di accumulo configurati, con lo stesso
@@ -5762,17 +5891,18 @@ function processTrPlans(){
       const shares = Math.round(plan.amountCents / priceCents * 1000) / 1000
       const dt = ym+'-'+String(dueDay).padStart(2,'0')
 
-      const { isNewEtf } = trAddLotToAsset(plan.etf, shares, priceCents, dt)
-      const feeCents = isNewEtf ? TR_BUY_FEE_CENTS : 0
+      const feeCents = existingAsset ? 0 : TR_BUY_FEE_CENTS
 
       // L'acquisto esce dalla liquidità Trade Republic; se non basta,
       // saltiamo questo mese senza bloccare gli altri piani (lo stesso
       // approccio già usato per i trasferimenti ricorrenti finanziari).
       if(TR_DATA.cashCents < plan.amountCents + feeCents) return
+      trAddLotToAsset(plan.etf, shares, priceCents, dt)
       TR_DATA.cashCents -= (plan.amountCents + feeCents)
 
       TR_DATA.ops.unshift({
-        type:'buy', etf:plan.etf, amountCents:plan.amountCents, dt, fee:feeCents
+        id: genId('op'), type:'buy', etf:plan.etf, amountCents:plan.amountCents,
+        shares, priceCents, dt, fee:feeCents
       })
 
       plan.lastAppliedYm = ym
@@ -5884,7 +6014,10 @@ function trTryInvestPending(kind, etfId, dueYmd, fromOwnCash){
   const shares = Math.round(pendingCents / priceCents * 1000) / 1000
   trAddLotToAsset(etfId, shares, priceCents, dueYmd)
   if(cashNeeded>0) TR_DATA.cashCents -= cashNeeded
-  TR_DATA.ops.unshift({ type: kind, etf: etfId, amountCents: pendingCents, dt: dueYmd, fee: feeCents })
+  TR_DATA.ops.unshift({
+    id: genId('op'), type: kind, etf: etfId, amountCents: pendingCents,
+    shares, priceCents, dt: dueYmd, fee: feeCents
+  })
   TR_DATA[pendingField] = 0
   TR_DATA[lastField] = dueYmd
   saveTrData()
@@ -6022,14 +6155,16 @@ function renderTR(){
   }
 
   // Operazioni recenti
+  trEnsureOpIds()
   const opsEl=document.getElementById('tr-ops-list')
   opsEl.innerHTML=TR_DATA.ops.slice(0,8).map(op=>{
+    const delBtn = `<button class="tr-op-del-btn" onclick="event.stopPropagation(); deleteTrOp('${op.id}')" title="Elimina operazione">✕</button>`
     if(op.type==='int'){
       return `<div class="txn">
         <div class="txn-icon" style="background:rgba(13,159,94,.1)">💵</div>
         <div class="txn-info"><div class="txn-desc">Interessi liquidità</div>
           <div class="txn-meta">${fmtDateShort(op.dt)} · Trade Republic</div></div>
-        <div class="txn-right"><div class="txn-amount" style="color:var(--green)">+${fmt(op.amountCents)}</div></div>
+        <div class="txn-right"><div class="txn-amount" style="color:var(--green)">+${fmt(op.amountCents)}</div></div>${delBtn}
       </div>`
     }
     if(op.type==='saveback'){
@@ -6038,7 +6173,7 @@ function renderTR(){
         <div class="txn-icon" style="background:rgba(13,159,94,.1)">🎯</div>
         <div class="txn-info"><div class="txn-desc">Saveback → ${m.n}</div>
           <div class="txn-meta">${fmtDateShort(op.dt)} · 1% cashback</div></div>
-        <div class="txn-right"><div class="txn-amount" style="color:var(--green)">+${fmt(op.amountCents)}</div></div>
+        <div class="txn-right"><div class="txn-amount" style="color:var(--green)">+${fmt(op.amountCents)}</div></div>${delBtn}
       </div>`
     }
     if(op.type==='roundup'){
@@ -6047,7 +6182,7 @@ function renderTR(){
         <div class="txn-icon" style="background:rgba(13,159,94,.1)">🪙</div>
         <div class="txn-info"><div class="txn-desc">Round Up → ${m.n}</div>
           <div class="txn-meta">${fmtDateShort(op.dt)} · Arrotondamento pagamento</div></div>
-        <div class="txn-right"><div class="txn-amount" style="color:var(--green)">+${fmt(op.amountCents)}</div></div>
+        <div class="txn-right"><div class="txn-amount" style="color:var(--green)">+${fmt(op.amountCents)}</div></div>${delBtn}
       </div>`
     }
     if(op.type==='manual'){
@@ -6059,7 +6194,7 @@ function renderTR(){
         <div class="txn-info"><div class="txn-desc">${isCredit?'Correzione posizione':'Acquisto manuale'} ${m.n}</div>
           <div class="txn-meta">${fmtDateShort(op.dt)}${op.fee>0?' · Fee €'+(op.fee/100).toFixed(2):''}</div></div>
         <div class="txn-right"><div class="txn-amount" style="color:${isCredit?'var(--green)':'var(--red)'}">${isCredit?'+':'-'}${fmt(absAmt)}</div>
-          <div class="txn-cat">${isCredit?'Storno':'Investimento'}</div></div>
+          <div class="txn-cat">${isCredit?'Storno':'Investimento'}</div></div>${delBtn}
       </div>`
     }
     if(op.type==='sell'){
@@ -6069,7 +6204,7 @@ function renderTR(){
         <div class="txn-info"><div class="txn-desc">Vendita ${m.n}</div>
           <div class="txn-meta">${fmtDateShort(op.dt)} · Fee €${(op.fee/100).toFixed(2)}</div></div>
         <div class="txn-right"><div class="txn-amount" style="color:var(--green)">+${fmt(op.amountCents-op.fee)}</div>
-          <div class="txn-cat">Disinvestimento</div></div>
+          <div class="txn-cat">Disinvestimento</div></div>${delBtn}
       </div>`
     }
     const m=TR_ETF_META[op.etf]||TR_ETF_META.custom
@@ -6078,7 +6213,7 @@ function renderTR(){
       <div class="txn-info"><div class="txn-desc">Acquisto ${m.n}</div>
         <div class="txn-meta">${fmtDateShort(op.dt)} · Piano accumulo · Fee €${(op.fee/100).toFixed(2)}</div></div>
       <div class="txn-right"><div class="txn-amount" style="color:var(--red)">-${fmt(op.amountCents)}</div>
-        <div class="txn-cat">Investimento</div></div>
+        <div class="txn-cat">Investimento</div></div>${delBtn}
     </div>`
   }).join('')
 }
@@ -6756,10 +6891,15 @@ function saveTrAsset(){
       showToast(`⚠️ Liquidità Trade Republic insufficiente (disponibile: ${fmt(TR_DATA.cashCents)}, servono: ${fmt(deltaCents)})`)
       return
     }
+    const assetSnapshotBefore = JSON.parse(JSON.stringify(TR_DATA.assets[idx]))
     TR_DATA.assets[idx] = { ...TR_DATA.assets[idx], ...assetData }
     TR_DATA.cashCents -= deltaCents // se deltaCents è negativo, questo la ACCREDITA
     if(deltaCents !== 0){
-      TR_DATA.ops.unshift({ type:'manual', etf, amountCents: deltaCents, dt: todayYmd, fee: 0 })
+      TR_DATA.ops.unshift({
+        id: genId('op'), type:'manual', etf, amountCents: deltaCents,
+        shares: sharesRounded, priceCents: avgCents, dt: todayYmd, fee: 0,
+        assetSnapshotBefore
+      })
     }
     showToast('✅ Posizione aggiornata!')
   } else {
@@ -6787,7 +6927,10 @@ function saveTrAsset(){
       TR_DATA.assets.push({ id: genId('e'), ...assetData }) // ← FIX: prima 'e'+Date.now(), stesso rischio di collisione
     }
     TR_DATA.cashCents -= cashNeeded
-    TR_DATA.ops.unshift({ type:'manual', etf, amountCents: newCostCents, dt: todayYmd, fee: feeCents })
+    TR_DATA.ops.unshift({
+      id: genId('op'), type:'manual', etf, amountCents: newCostCents,
+      shares: sharesRounded, priceCents: avgCents, dt: todayYmd, fee: feeCents
+    })
     showToast('✅ Posizione aggiunta!')
   }
   saveTrData()
@@ -6994,7 +7137,7 @@ function trConfirmSell(){
   }
 
   // Applica davvero il consumo FIFO sui lotti reali dell'asset
-  const { remainingLots } = trSimulateFifoSell(asset, sharesToSell)
+  const { consumedLots, remainingLots } = trSimulateFifoSell(asset, sharesToSell)
   asset.lots = remainingLots
 
   // Se la vendita ha esaurito completamente la posizione, rimuoviamo
@@ -7009,7 +7152,9 @@ function trConfirmSell(){
   TR_DATA.cashCents += netCents
 
   TR_DATA.ops.unshift({
-    type: 'sell', etf: asset.etf, amountCents: grossCents,
+    id: genId('op'), type: 'sell', etf: asset.etf, amountCents: grossCents,
+    shares: sharesToSell, priceCents: asset.currPriceCents,
+    consumedLots, assetId, assetSnapshotBefore: _trSellSnapshot.assetSnapshot,
     dt: new Date().toISOString().split('T')[0], fee: TR_SELL_FEE_CENTS,
     _undoMarker: sellOpMarker
   })
