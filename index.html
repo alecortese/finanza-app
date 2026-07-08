@@ -4019,6 +4019,13 @@ function processRecurringTransactions(){
           pocketId: r.pocketId || null
         })
 
+        // Saveback/Round Up: si basano sull'importo PIENO addebitato sulla
+        // carta (r.amountCents), non sulla sola quota personale registrata
+        // sopra — un abbonamento condiviso viene comunque pagato per intero
+        // con la carta Trade Republic, la ripartizione tra quote è solo una
+        // distinzione interna di FinApp, invisibile al circuito della carta.
+        trApplyCardAutomations(r.acc, r.type, r.amountCents, dt)
+
         // Il contatore si comporta in modo opposto secondo la modalità:
         // 'after'   → il credito SALE ogni mese (ti devono sempre di più,
         //             finché non arriva il rimborso che lo riduce).
@@ -4300,7 +4307,7 @@ function buildTxRow(tx){
         <div class="txn-transfer-icon">⇄</div>
         <div class="txn-info">
           <div class="txn-desc" style="display:flex;align-items:center;gap:6px">
-            ${tx.d||'Trasferimento'}
+            ${tx.d?escapeHtml(tx.d):'Trasferimento'}
             <span class="badge badge-transfer">TRASF.</span>
           </div>
           <div class="txn-transfer-arrow">${fromAcc.e} ${fromAcc.n} → ${toAcc.e} ${toAcc.n}</div>
@@ -4331,7 +4338,7 @@ function buildTxRow(tx){
     <div class="txn" id="txn-${tx.id}">
       <div class="txn-icon" style="background:${c.bg}">${c.e}</div>
       <div class="txn-info">
-        <div class="txn-desc">${tx.d}${noteIcon}</div>
+        <div class="txn-desc">${escapeHtml(tx.d)}${noteIcon}</div>
         <div class="txn-meta">${fmtDateShort(tx.dt)} · ${a.n}</div>
       </div>
       <div class="txn-right">
@@ -4641,7 +4648,7 @@ function renderRecurringList(){
     const isIncome=r.type==='income'
     const sign=isIncome?'+':'−'
     const amtCol=isIncome?'var(--green)':'var(--text)'
-    const label=isTransfer?`⇄ ${r.desc}`:`${sign}${fmt(r.amountCents)}`
+    const label=isTransfer?`⇄ ${escapeHtml(r.desc)}`:`${sign}${fmt(r.amountCents)}`
     const labelCol=isTransfer?'var(--blue)':amtCol
 
     // Abbonamenti condivisi: mostriamo la quota personale reale e il
@@ -4669,7 +4676,7 @@ function renderRecurringList(){
     return `<div class="cb-row" style="opacity:${r.active?1:.5}">
       <div class="cb-icon" style="background:${c.bg}">${isTransfer?'⇄':c.e}</div>
       <div class="cb-info">
-        <div class="cb-label">${r.desc}</div>
+        <div class="cb-label">${escapeHtml(r.desc)}</div>
         ${sharedInfo}
       </div>
       <div class="cb-right" style="flex-direction:row;align-items:center;gap:6px">
@@ -4710,7 +4717,7 @@ function openEditRecurringSheet(id){
       <div style="font-size:1rem;font-weight:800;margin-bottom:14px">✏️ Modifica ricorrente</div>
       <div class="form-group">
         <label class="form-label">Descrizione</label>
-        <input class="form-input" id="rec-edit-desc" type="text" value="${r.desc}">
+        <input class="form-input" id="rec-edit-desc" type="text" value="${escapeHtml(r.desc)}">
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -5301,7 +5308,7 @@ function saveTransfer(){
 
   // Registra UNA sola transazione tipo 'transfer' (neutrale per le stats)
   TX.unshift({
-    id:    Date.now(),
+    id:    genId('tx'), // ← FIX: prima era Date.now(), rischio di collisione se due movimenti nascono nello stesso millisecondo
     t:     'transfer',
     d:     note||`${fromAcc.n} → ${toAcc.n}`,
     cat:   'altro',   // campo richiesto dal modello, non usato per transfer
@@ -5447,10 +5454,14 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
     }
 
     TX.unshift({
-      id:Date.now(), t:_type, d:desc, cat:catId, acc:accId, a:amountCents, dt:date,
+      id:genId('tx'), t:_type, d:desc, cat:catId, acc:accId, a:amountCents, dt:date,
       note:note||'',
       pocketId: pocketId || null // traccia da quale Pocket è stata pagata/accreditata, se applicabile
     })
+    // Saveback/Round Up: si attivano SOLO qui (creazione di una nuova spesa),
+    // mai in modifica — altrimenti ogni volta che correggi un importo
+    // riceveresti un secondo cashback/arrotondamento per la stessa spesa.
+    trApplyCardAutomations(accId, _type, amountCents, date)
     // Se l'utente ha attivato "Rendi ricorrente", il giorno del mese
     // viene dedotto direttamente dalla data di questa transazione:
     // diventa il "template" per tutte le occorrenze future.
@@ -5514,6 +5525,7 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
   saveTX()
   renderHome()
   renderTxTab()
+  renderTR() // aggiorna subito cash/asset/contatori se questa spesa era su Trade Republic
   document.getElementById('f-desc').value=''
   document.getElementById('f-amount').value=''
   document.getElementById('tx-edit-id').value=''
@@ -5576,6 +5588,7 @@ async function initAppAfterLogin(){
   const _pocketTransfersApplied = processPocketRecurringTransfers()
   const _recurringApplied = processRecurringTransactions()
   const _trPlansApplied = processTrPlans()
+  const _trAutomationInvested = trProcessPendingAutomationInvestments()
   renderHome()
   setTimeout(initQuickExpenseWidget, 300)
   if(_recurringApplied>0){
@@ -5583,6 +5596,9 @@ async function initAppAfterLogin(){
   }
   if(_trPlansApplied>0){
     setTimeout(()=>showToast(`📈 ${_trPlansApplied} acquisto/i automatico/i da piano di accumulo`), 1200)
+  }
+  if(_trAutomationInvested){
+    setTimeout(()=>showToast(`🎯 Saveback/Round Up della settimana investiti`), 1800)
   }
 }
 window.initAppAfterLogin = initAppAfterLogin
@@ -5613,7 +5629,13 @@ const DEMO_TR_DATA = {
   cashCents: 0,              // liquidità — parte da 0, nessuna transazione demo
   interestRate: 0.03,        // 3% annuo — tasso attuale TR per i clienti italiani (luglio 2026); impostazione, non dato finanziario finto
   savebackCents: 0,
+  savebackCentsYm: null,     // mese a cui si riferisce savebackCents, per il reset automatico ad ogni nuovo mese
+  savebackPendingCents: 0,   // accantonato in attesa dell'investimento settimanale (ogni martedì)
+  lastSavebackInvestYmd: null, // data (YYYY-MM-DD) dell'ultimo investimento Saveback effettivo
   roundupCents: 0,
+  roundupCentsYm: null,      // idem per roundupCents
+  roundupPendingCents: 0,    // accantonato in attesa dell'investimento settimanale (ogni martedì)
+  lastRoundupInvestYmd: null, // data (YYYY-MM-DD) dell'ultimo investimento Round Up effettivo
   savebackOn: true,
   roundupOn: false,
   savebackMultiplier: 1,     // moltiplicatore 1x-5x
@@ -5762,6 +5784,146 @@ function processTrPlans(){
   return appliedCount
 }
 
+// ── SAVEBACK / ROUND UP — collegamento reale a una spesa pagata con la carta TR ──
+// Non investono più ad ogni singola spesa: l'importo che maturerebbe viene
+// ACCANTONATO (pending), e l'investimento vero e proprio del "salvadanaio"
+// accumulato avviene una volta a settimana, ogni martedì — esattamente
+// come richiesto, invece che spesa per spesa.
+//
+// Differenza di provenienza del denaro tra i due, che rispecchia il
+// funzionamento reale di Trade Republic:
+// - Saveback: è un cashback pagato dal circuito/dagli esercenti, non esce
+//   mai dalla tua liquidità — resta "in attesa" senza toccare cashCents,
+//   finché non viene davvero investito il martedì successivo.
+// - Round Up: è invece la tua stessa liquidità arrotondata all'euro
+//   superiore — viene scalata SUBITO dalla liquidità TR (è denaro tuo,
+//   deve sparire dallo spendibile appena maturato) e tenuta da parte,
+//   in attesa dello stesso investimento del martedì.
+// In entrambi i casi, se un ETF non è mai stato posseduto prima, si paga
+// la stessa commissione fissa di 1€ già usata per acquisti manuali e piani
+// automatici (mai due volte per lo stesso ETF) — SOLO al momento
+// dell'investimento vero e proprio, non quando si accantona.
+function trApplyCardAutomations(accId, type, expenseAmountCents, dt){
+  if(accId !== TR_ACCOUNT_ID || type !== 'expense' || !(expenseAmountCents>0)) return
+  let changed = false
+  if(TR_DATA.savebackOn){
+    const amt = Math.round(expenseAmountCents * 0.01 * TR_DATA.savebackMultiplier)
+    if(amt>0){
+      TR_DATA.savebackPendingCents = (TR_DATA.savebackPendingCents||0) + amt
+      trBumpMonthlyAutomationCounter('saveback', amt)
+      changed = true
+    }
+  }
+  if(TR_DATA.roundupOn){
+    const nextEuroCents = Math.ceil(expenseAmountCents/100)*100
+    const spareCents = nextEuroCents - expenseAmountCents // 0-99 centesimi di "resto" verso l'euro superiore
+    const amt = Math.round(spareCents * TR_DATA.roundupMultiplier)
+    // Il round up è denaro tuo: se la liquidità non basta nemmeno per
+    // accantonarlo, questa singola spesa semplicemente non ne genera —
+    // niente "accantonamento fantasma" superiore a quanto hai davvero.
+    if(amt>0 && TR_DATA.cashCents>=amt){
+      TR_DATA.cashCents -= amt
+      TR_DATA.roundupPendingCents = (TR_DATA.roundupPendingCents||0) + amt
+      trBumpMonthlyAutomationCounter('roundup', amt)
+      changed = true
+    }
+  }
+  if(changed) saveTrData()
+  // Se oggi è già il giorno dell'investimento settimanale e non l'abbiamo
+  // ancora fatto questa settimana, ne approfittiamo subito invece di
+  // aspettare il prossimo avvio dell'app.
+  trProcessPendingAutomationInvestments()
+}
+
+const TR_AUTOMATION_INVEST_WEEKDAY = 2 // 0=domenica, 1=lunedì, 2=martedì, ...
+
+// Restituisce la data (YYYY-MM-DD) del più recente giorno della settimana
+// richiesto che sia oggi o nel passato — es. se oggi è giovedì e si chiede
+// martedì, torna il martedì di QUESTA settimana appena trascorso.
+function trMostRecentWeekday(targetDow){
+  const today = new Date()
+  today.setHours(0,0,0,0)
+  const diff = (today.getDay() - targetDow + 7) % 7
+  const d = new Date(today)
+  d.setDate(today.getDate() - diff)
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
+}
+
+// Controlla se è già passato (o è oggi) il giorno dell'investimento
+// settimanale e, per ciascuna delle due automazioni indipendentemente,
+// investe tutto l'accantonato non ancora investito per questa settimana.
+// Indipendenti tra loro: se Saveback ha fondi a sufficienza per l'eventuale
+// commissione ma Round Up no, il primo va comunque a buon fine.
+function trProcessPendingAutomationInvestments(){
+  const dueYmd = trMostRecentWeekday(TR_AUTOMATION_INVEST_WEEKDAY)
+  const sb = trTryInvestPending('saveback', TR_DATA.savebackTarget, dueYmd, /*fromOwnCash=*/false)
+  const ru = trTryInvestPending('roundup', TR_DATA.roundupTarget, dueYmd, /*fromOwnCash=*/false)
+  return sb || ru
+}
+
+// fromOwnCash qui riguarda SOLO l'importo accantonato: per il round up la
+// liquidità è già stata scalata al momento dell'accantonamento (sopra), a
+// questo punto si tratta solo di trasformarlo in un vero lotto ETF — l'unica
+// spesa di liquidità possibile qui è l'eventuale commissione per un ETF nuovo.
+function trTryInvestPending(kind, etfId, dueYmd, fromOwnCash){
+  const pendingField = kind==='saveback' ? 'savebackPendingCents' : 'roundupPendingCents'
+  const lastField = kind==='saveback' ? 'lastSavebackInvestYmd' : 'lastRoundupInvestYmd'
+  const pendingCents = TR_DATA[pendingField] || 0
+  if(pendingCents<=0) return false
+  if(TR_DATA[lastField] && TR_DATA[lastField] >= dueYmd) return false // già investito per questa settimana
+
+  const existingAsset = TR_DATA.assets.find(a=>a.etf===etfId)
+  const feeCents = existingAsset ? 0 : TR_BUY_FEE_CENTS
+  const cashNeeded = (fromOwnCash ? pendingCents : 0) + feeCents
+  // Se manca liquidità anche solo per la commissione fissa, saltiamo per ora
+  // e ritentiamo al prossimo controllo (prossimo avvio app o prossima spesa
+  // TR) — l'accantonato NON si perde, resta lì in attesa.
+  if(cashNeeded>0 && TR_DATA.cashCents < cashNeeded) return false
+
+  const priceCents = existingAsset ? existingAsset.currPriceCents : 10000 // stessa stima di fallback dei piani automatici
+  const shares = Math.round(pendingCents / priceCents * 1000) / 1000
+  trAddLotToAsset(etfId, shares, priceCents, dueYmd)
+  if(cashNeeded>0) TR_DATA.cashCents -= cashNeeded
+  TR_DATA.ops.unshift({ type: kind, etf: etfId, amountCents: pendingCents, dt: dueYmd, fee: feeCents })
+  TR_DATA[pendingField] = 0
+  TR_DATA[lastField] = dueYmd
+  saveTrData()
+  return true
+}
+
+// Il contatore "+€X/mese" mostrato nella card conta quanto hai ACCANTONATO
+// questo mese (non solo quanto è già stato materialmente investito): è il
+// segnale più immediato e utile per l'utente, che altrimenti dovrebbe
+// aspettare il martedì successivo per vedere qualsiasi numero muoversi.
+// Si riferisce SEMPRE al mese corrente: se dall'ultimo aggiornamento è
+// cambiato il mese, lo azzeriamo prima di sommare, così non si accumula
+// all'infinito mostrando un totale di anni fa. Stesso approccio "campo Ym
+// che traccia l'ultimo mese valido" già usato per le ricorrenze finanziarie
+// (lastAppliedYm).
+function trBumpMonthlyAutomationCounter(kind, amountCents){
+  const curYm = getCurMonth()
+  if(kind==='saveback'){
+    if(TR_DATA.savebackCentsYm !== curYm){ TR_DATA.savebackCents = 0; TR_DATA.savebackCentsYm = curYm }
+    TR_DATA.savebackCents += amountCents
+  } else {
+    if(TR_DATA.roundupCentsYm !== curYm){ TR_DATA.roundupCents = 0; TR_DATA.roundupCentsYm = curYm }
+    TR_DATA.roundupCents += amountCents
+  }
+}
+
+// Chiamata da renderTrToggles(): se l'utente non genera nessuna spesa TR
+// per un po', i contatori mensili resterebbero "congelati" al mese in cui
+// sono stati aggiornati l'ultima volta finché non arriva una nuova spesa.
+// Qui li azzeriamo anche solo aprendo la card, così lo stato mostrato è
+// sempre corretto anche senza nuove operazioni.
+function trRefreshStaleMonthlyCounters(){
+  const curYm = getCurMonth()
+  let changed = false
+  if(TR_DATA.savebackCentsYm && TR_DATA.savebackCentsYm !== curYm){ TR_DATA.savebackCents = 0; TR_DATA.savebackCentsYm = curYm; changed = true }
+  if(TR_DATA.roundupCentsYm && TR_DATA.roundupCentsYm !== curYm){ TR_DATA.roundupCents = 0; TR_DATA.roundupCentsYm = curYm; changed = true }
+  if(changed) saveTrData()
+}
+
 function trTotals(){
   let totalCurrent=0, totalInvested=0
   TR_DATA.assets.forEach(a=>{
@@ -5877,6 +6039,27 @@ function renderTR(){
         <div class="txn-info"><div class="txn-desc">Saveback → ${m.n}</div>
           <div class="txn-meta">${fmtDateShort(op.dt)} · 1% cashback</div></div>
         <div class="txn-right"><div class="txn-amount" style="color:var(--green)">+${fmt(op.amountCents)}</div></div>
+      </div>`
+    }
+    if(op.type==='roundup'){
+      const m=TR_ETF_META[op.etf]||TR_ETF_META.custom
+      return `<div class="txn">
+        <div class="txn-icon" style="background:rgba(13,159,94,.1)">🪙</div>
+        <div class="txn-info"><div class="txn-desc">Round Up → ${m.n}</div>
+          <div class="txn-meta">${fmtDateShort(op.dt)} · Arrotondamento pagamento</div></div>
+        <div class="txn-right"><div class="txn-amount" style="color:var(--green)">+${fmt(op.amountCents)}</div></div>
+      </div>`
+    }
+    if(op.type==='manual'){
+      const m=TR_ETF_META[op.etf]||TR_ETF_META.custom
+      const isCredit = op.amountCents < 0
+      const absAmt = Math.abs(op.amountCents)
+      return `<div class="txn">
+        <div class="txn-icon" style="background:${m.bg}">${m.e}</div>
+        <div class="txn-info"><div class="txn-desc">${isCredit?'Correzione posizione':'Acquisto manuale'} ${m.n}</div>
+          <div class="txn-meta">${fmtDateShort(op.dt)}${op.fee>0?' · Fee €'+(op.fee/100).toFixed(2):''}</div></div>
+        <div class="txn-right"><div class="txn-amount" style="color:${isCredit?'var(--green)':'var(--red)'}">${isCredit?'+':'-'}${fmt(absAmt)}</div>
+          <div class="txn-cat">${isCredit?'Storno':'Investimento'}</div></div>
       </div>`
     }
     if(op.type==='sell'){
@@ -6537,6 +6720,11 @@ function saveTrAsset(){
     }
   }
 
+  const sharesRounded = Math.round(shares * 1000) / 1000
+  const avgCents = Math.round(avg * 100)
+  const newCostCents = Math.round(sharesRounded * avgCents) // quanto varrebbe, ai prezzi indicati, la posizione dopo il salvataggio
+  const todayYmd = new Date().toISOString().split('T')[0]
+
   // Nota: l'inserimento/modifica manuale crea sempre un asset con un SOLO
   // lotto equivalente alle quote+prezzo indicati. Per posizioni già composte
   // da più acquisti reali nel tempo, i lotti successivi si aggiungono solo
@@ -6548,20 +6736,58 @@ function saveTrAsset(){
     currPriceCents:  Math.round(curr * 100),
     currency,
     lots: [{
-      shares: Math.round(shares * 1000) / 1000,
-      priceCents: Math.round(avg * 100),
-      dt: new Date().toISOString().split('T')[0]
+      shares: sharesRounded,
+      priceCents: avgCents,
+      dt: todayYmd
     }]
   }
 
   if(editId){
-    // Update existing
+    // Update existing — trattiamo la differenza tra il vecchio e il nuovo
+    // costo come un vero movimento di liquidità: se aumenti quote/prezzo è
+    // come se avessi comprato di più (esce cassa), se le riduci è una
+    // correzione che ti restituisce cassa. Nessuna commissione qui: l'ETF
+    // era già posseduto prima della modifica.
     const idx = TR_DATA.assets.findIndex(a => a.id === editId)
-    if(idx !== -1) TR_DATA.assets[idx] = { ...TR_DATA.assets[idx], ...assetData }
+    if(idx === -1) return
+    const oldCostCents = TR_DATA.assets[idx].lots.reduce((s,l)=>s+Math.round(l.shares*l.priceCents), 0)
+    const deltaCents = newCostCents - oldCostCents
+    if(deltaCents > 0 && TR_DATA.cashCents < deltaCents){
+      showToast(`⚠️ Liquidità Trade Republic insufficiente (disponibile: ${fmt(TR_DATA.cashCents)}, servono: ${fmt(deltaCents)})`)
+      return
+    }
+    TR_DATA.assets[idx] = { ...TR_DATA.assets[idx], ...assetData }
+    TR_DATA.cashCents -= deltaCents // se deltaCents è negativo, questo la ACCREDITA
+    if(deltaCents !== 0){
+      TR_DATA.ops.unshift({ type:'manual', etf, amountCents: deltaCents, dt: todayYmd, fee: 0 })
+    }
     showToast('✅ Posizione aggiornata!')
   } else {
-    // Add new
-    TR_DATA.assets.push({ id: 'e' + Date.now(), ...assetData })
+    // Add new — un acquisto vero: scala la liquidità (+ commissione fissa di
+    // 1€ se questo ETF non è mai stato posseduto prima) e finisce nello
+    // storico operazioni, esattamente come piani/saveback/round up.
+    // Se l'ETF scelto è già presente in portafoglio, il nuovo acquisto
+    // diventa un NUOVO LOTTO sull'asset esistente (stessa riga, cronologia
+    // FIFO corretta) invece di creare una seconda riga duplicata per lo
+    // stesso strumento.
+    const existingAsset = TR_DATA.assets.find(a => a.etf === etf)
+    const isNewEtf = !existingAsset
+    const feeCents = isNewEtf ? TR_BUY_FEE_CENTS : 0
+    const cashNeeded = newCostCents + feeCents
+    if(TR_DATA.cashCents < cashNeeded){
+      showToast(`⚠️ Liquidità Trade Republic insufficiente (disponibile: ${fmt(TR_DATA.cashCents)}, servono: ${fmt(cashNeeded)})`)
+      return
+    }
+    if(existingAsset){
+      trEnsureLots(existingAsset).push({ shares: sharesRounded, priceCents: avgCents, dt: todayYmd })
+      existingAsset.currPriceCents = Math.round(curr * 100) // il prezzo corrente indicato ora aggiorna comunque la valorizzazione dell'intera posizione
+      existingAsset.currency = currency
+      if(etf === 'custom') existingAsset.customName = custom
+    } else {
+      TR_DATA.assets.push({ id: genId('e'), ...assetData }) // ← FIX: prima 'e'+Date.now(), stesso rischio di collisione
+    }
+    TR_DATA.cashCents -= cashNeeded
+    TR_DATA.ops.unshift({ type:'manual', etf, amountCents: newCostCents, dt: todayYmd, fee: feeCents })
     showToast('✅ Posizione aggiunta!')
   }
   saveTrData()
@@ -6655,13 +6881,18 @@ function trSellSetPct(pct){
 function trSimulateFifoSell(asset, sharesToSell){
   const lots = trEnsureLots(asset).map(l => ({...l})) // copia, non toccare gli originali
   let remaining = sharesToSell
-  let costBasisCents = 0 // quanto valevano all'acquisto le quote vendute
+  let costBasisCents = 0 // quanto valevano all'acquisto le quote vendute — SEMPRE intero (centesimi)
   const consumedLots = []
 
   for(const lot of lots){
     if(remaining <= 0.0001) break
     const takeFromLot = Math.min(lot.shares, remaining)
-    costBasisCents += takeFromLot * lot.priceCents
+    // FIX: takeFromLot è un numero di quote (float, es. 3.256) — moltiplicarlo
+    // per priceCents e sommarlo direttamente rendeva costBasisCents un float,
+    // nonostante il nome suggerisca centesimi interi. Arrotondiamo ad ogni
+    // passaggio così l'invariante "solo interi in centesimi" vale anche qui,
+    // non solo nel valore finale restituito al chiamante.
+    costBasisCents += Math.round(takeFromLot * lot.priceCents)
     consumedLots.push({ shares: takeFromLot, priceCents: lot.priceCents, dt: lot.dt })
     lot.shares -= takeFromLot
     remaining -= takeFromLot
@@ -6822,6 +7053,7 @@ function undoTrSell(){
 
 // ── TR TOGGLE LOGIC ───────────────────────────────────────────────────────────
 function renderTrToggles(){
+  trRefreshStaleMonthlyCounters() // azzera "+€X/mese" se il mese è cambiato dall'ultimo aggiornamento
   const sbMeta = TR_ETF_META[TR_DATA.savebackTarget]||TR_ETF_META.msci
   const ruMeta = TR_ETF_META[TR_DATA.roundupTarget]||TR_ETF_META.msci
 
@@ -6832,7 +7064,8 @@ function renderTrToggles(){
     sbToggle.classList.toggle('on', TR_DATA.savebackOn)
     if(sbStat){
       if(TR_DATA.savebackOn){
-        sbStat.textContent = '✓ Attivo · '+TR_DATA.savebackMultiplier+'x · '+sbMeta.e+' '+sbMeta.n+' · +'+fmt(TR_DATA.savebackCents)+'/mese'
+        const sbPending = TR_DATA.savebackPendingCents>0 ? ' · '+fmt(TR_DATA.savebackPendingCents)+' in attesa (martedì)' : ''
+        sbStat.textContent = '✓ Attivo · '+TR_DATA.savebackMultiplier+'x · '+sbMeta.e+' '+sbMeta.n+' · +'+fmt(TR_DATA.savebackCents)+'/mese'+sbPending
         sbStat.className = 'tr-toggle-stat on'
       } else {
         sbStat.textContent = 'Non attivo'
@@ -6847,7 +7080,8 @@ function renderTrToggles(){
     ruToggle.classList.toggle('on', TR_DATA.roundupOn)
     if(ruStat){
       if(TR_DATA.roundupOn){
-        ruStat.textContent = '✓ Attivo · '+TR_DATA.roundupMultiplier+'x · '+ruMeta.e+' '+ruMeta.n+' · +'+fmt(TR_DATA.roundupCents)+'/mese'
+        const ruPending = TR_DATA.roundupPendingCents>0 ? ' · '+fmt(TR_DATA.roundupPendingCents)+' in attesa (martedì)' : ''
+        ruStat.textContent = '✓ Attivo · '+TR_DATA.roundupMultiplier+'x · '+ruMeta.e+' '+ruMeta.n+' · +'+fmt(TR_DATA.roundupCents)+'/mese'+ruPending
         ruStat.className = 'tr-toggle-stat on'
       } else {
         ruStat.textContent = 'Non attivo'
@@ -6898,11 +7132,11 @@ function saveTrPlan(){
   // vero.
   let planEtfKey = etf
   if(etf==='custom'){
-    planEtfKey = 'custom_'+Date.now()
+    planEtfKey = genId('custom') // ← FIX: prima 'custom_'+Date.now(), stesso rischio di collisione
     TR_ETF_META[planEtfKey] = {n: customName, e:'✏️', c:'#717892', bg:'rgba(107,114,128,.1)'}
   }
 
-  TR_DATA.plans.push({id:'p'+Date.now(),etf:planEtfKey,amountCents:Math.round(amount*100),day:parseInt(day)})
+  TR_DATA.plans.push({id:genId('p'),etf:planEtfKey,amountCents:Math.round(amount*100),day:parseInt(day)}) // ← FIX: prima 'p'+Date.now()
   saveTrData()
   document.getElementById('tr-savings-sheet').classList.remove('open')
   document.getElementById('tr-f-amount').value=''
@@ -8176,7 +8410,7 @@ function renderQuickExpWidget() {
         onmousedown="this.style.transform='scale(.92)'"
         onmouseup="this.style.transform=''">
           <span style="font-size:1.4rem;">${it.emoji}</span>
-          <span style="font-size:.7rem;font-weight:700;color:var(--text);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.label}</span>
+          <span style="font-size:.7rem;font-weight:700;color:var(--text);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(it.label)}</span>
           <span style="font-size:.75rem;font-weight:800;color:var(--red);">${fmt(it.amountCents)}</span>
         </button>
       `).join('')}
@@ -8213,7 +8447,7 @@ function addQuickExpense(id) {
 
   // Invariante centesimi interi — amountCents è già in centesimi
   TX.unshift({
-    id:  Date.now(),
+    id:  genId('tx'), // ← FIX: Date.now() poteva collidere con tap ripetuti veloci sul FAB
     t:   type,
     d:   it.emoji + ' ' + it.label,
     cat: it.cat,
@@ -8222,8 +8456,10 @@ function addQuickExpense(id) {
     dt:  today
   });
   saveTX()
+  trApplyCardAutomations(accId, type, it.amountCents, today) // Saveback/Round Up se pagata con Trade Republic
   renderHome();
   renderTxTab();
+  renderTR() // aggiorna subito cash/asset/contatori se questa spesa era su Trade Republic
   showToast('⚡ ' + it.label + ' −' + fmt(it.amountCents) + ' aggiunta');
   if(type==='expense'){
     setTimeout(()=>checkBudgetAlertAfterExpense(it.cat), 2700)
@@ -8274,7 +8510,7 @@ function _renderQeList(accsOpts, catsOpts) {
     <div style="background:var(--surface2);border-radius:12px;padding:10px;margin-bottom:8px;border:1px solid var(--border);">
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
         <input value="${it.emoji}" maxlength="2" style="width:44px;text-align:center;font-size:1.3rem;padding:4px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:var(--font);" oninput="_qeField(${idx},'emoji',this.value)">
-        <input value="${it.label}" placeholder="Nome" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:var(--font);font-weight:600;" oninput="_qeField(${idx},'label',this.value)">
+        <input value="${escapeHtml(it.label)}" placeholder="Nome" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:var(--font);font-weight:600;" oninput="_qeField(${idx},'label',this.value)">
         <input type="number" value="${(it.amountCents/100).toFixed(2)}" min="0.01" step="0.01" placeholder="€" style="width:72px;padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:var(--font);font-weight:700;" oninput="_qeField(${idx},'amountCents',Math.round((parseFloat(this.value)||0)*100))">
         <button onclick="_qeRemove(${idx})" style="background:var(--red-bg);color:var(--red);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-family:var(--font);">🗑</button>
       </div>
@@ -8293,7 +8529,7 @@ function _qeField(idx, field, val) { if (_qeEditItems) _qeEditItems[idx][field] 
 function _qeRemove(idx) { if (!_qeEditItems) return; _qeEditItems.splice(idx,1); _renderQeList(); }
 function addQuickExpItem() {
   if (!_qeEditItems) _qeEditItems = [];
-  _qeEditItems.push({ id: Date.now(), emoji: '💸', label: 'Nuova', amountCents: 500, cat: 'altro', acc: ACCOUNTS[0].id, type: 'expense' });
+  _qeEditItems.push({ id: genId('qe'), emoji: '💸', label: 'Nuova', amountCents: 500, cat: 'altro', acc: ACCOUNTS[0].id, type: 'expense' });
   _renderQeList();
 }
 function saveQuickExpSettings() {
@@ -9176,10 +9412,16 @@ function rndBuildIndicatori(sp, ce){
   const { stats: _covStats } = computeMonthlyStats(6)
   const _covMonths = Object.values(_covStats)
   const avgMonthlyExp   = _covMonths.reduce((s,m)=>s+m.exp,0) / Math.max(_covMonths.length,1)
-  const coverageMonths  = avgMonthlyExp>0 ? (patrimonioNetto/avgMonthlyExp).toFixed(1) : '∞'
-  const covLabel        = parseFloat(coverageMonths)>=6?'Solido':parseFloat(coverageMonths)>=3?'Accettabile':'Fragile'
-  const covCol          = parseFloat(coverageMonths)>=6?'var(--green)':parseFloat(coverageMonths)>=3?'var(--orange)':'var(--red)'
-  const covBg           = parseFloat(coverageMonths)>=6?'var(--green-bg)':parseFloat(coverageMonths)>=3?'var(--orange-bg)':'var(--red-bg)'
+  // FIX: prima il fallback era la STRINGA '∞', e parseFloat('∞') restituisce
+  // NaN — ogni confronto "NaN>=6" è sempre false, quindi con spese medie a
+  // zero (es. dati storici ancora incompleti) l'indicatore mostrava sempre
+  // "Fragile" 🔴 invece del massimo "Solido" 🟢, che è il significato reale
+  // di una copertura infinita. Usando il valore numerico Infinity i
+  // confronti >= funzionano come previsto (Infinity>=6 è true).
+  const coverageMonths  = avgMonthlyExp>0 ? (patrimonioNetto/avgMonthlyExp) : Infinity
+  const covLabel        = coverageMonths>=6?'Solido':coverageMonths>=3?'Accettabile':'Fragile'
+  const covCol          = coverageMonths>=6?'var(--green)':coverageMonths>=3?'var(--orange)':'var(--red)'
+  const covBg           = coverageMonths>=6?'var(--green-bg)':coverageMonths>=3?'var(--orange-bg)':'var(--red-bg)'
 
   document.getElementById('rnd-indicatori').innerHTML = `
     <div class="ind-grid">
@@ -9220,7 +9462,7 @@ function rndBuildIndicatori(sp, ce){
           <div class="ind-card-icon" style="background:${covBg}">🛡️</div>
           <div class="ind-card-label">Copertura spese</div>
         </div>
-        <div class="ind-card-value" style="color:${covCol}">${coverageMonths} mesi</div>
+        <div class="ind-card-value" style="color:${covCol}">${coverageMonths===Infinity?'∞':coverageMonths.toFixed(1)} mesi</div>
         <div class="ind-card-status" style="background:${covBg};color:${covCol}">${covLabel}</div>
         <div class="ind-card-sub">Mesi di autonomia col patrimonio netto.</div>
       </div>
