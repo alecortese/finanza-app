@@ -1733,17 +1733,17 @@ if(localStorage.getItem('finapp-theme') === 'dark'){
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Numero quote</label>
-        <input class="form-input" type="number" id="tr-a-shares" placeholder="es. 2.5" min="0.001" step="0.001" style="font-family:var(--mono);font-weight:700" oninput="trCalcPreview()">
+        <input class="form-input" type="number" id="tr-a-shares" placeholder="es. 2.5" min="0.0000000001" step="0.0000000001" style="font-family:var(--mono);font-weight:700" oninput="trCalcPreview()">
       </div>
       <div class="form-group">
         <label class="form-label">Prezzo medio acquisto €</label>
-        <input class="form-input" type="number" id="tr-a-avg" placeholder="es. 78.40" min="0.01" step="0.01" style="font-family:var(--mono);font-weight:700" oninput="trCalcPreview()">
+        <input class="form-input" type="number" id="tr-a-avg" placeholder="es. 78.40" min="0.00000001" step="0.00000001" style="font-family:var(--mono);font-weight:700" oninput="trCalcPreview()">
       </div>
     </div>
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Prezzo corrente €</label>
-        <input class="form-input" type="number" id="tr-a-curr" placeholder="es. 86.12" min="0.01" step="0.01" style="font-family:var(--mono);font-weight:700" oninput="trCalcPreview()">
+        <input class="form-input" type="number" id="tr-a-curr" placeholder="es. 86.12" min="0.00000001" step="0.00000001" style="font-family:var(--mono);font-weight:700" oninput="trCalcPreview()">
       </div>
       <div class="form-group">
         <label class="form-label">Valuta</label>
@@ -1801,7 +1801,7 @@ if(localStorage.getItem('finapp-theme') === 'dark'){
     <div class="form-group">
       <label class="form-label">Quote da vendere</label>
       <input class="form-input" type="number" id="tr-sell-shares" placeholder="es. 2.5"
-        min="0.001" step="0.001" style="font-family:var(--mono);font-weight:700" oninput="trSellPreviewUpdate()">
+        min="0.0000000001" step="0.0000000001" style="font-family:var(--mono);font-weight:700" oninput="trSellPreviewUpdate()">
     </div>
 
     <!-- ANTEPRIMA VENDITA -->
@@ -2578,6 +2578,10 @@ async function bootstrapUserData(){
   SAVING_GOALS = savingGoals  ?? []
   RECURRING    = recurring    ?? []
   TR_DATA      = trData       ?? structuredClone(DEMO_TR_DATA)
+
+  // Migra i prezzi salvati in formato legacy (centesimi, 2 decimali) al
+  // nuovo formato a 8 decimali — una tantum, automatica, idempotente.
+  migrateTrPricePrecision(TR_DATA)
 
   // Ripristina in TR_ETF_META (cache di sessione) i nomi/emoji/colori degli
   // ETF e asset personalizzati salvati in precedenza: senza questo, dopo
@@ -4175,6 +4179,7 @@ function applyImportedBackup(parsed){
   SAVINGS_GOAL = normalizeImportedObject(parsed.savingsGoal, SAVINGS_GOAL)
   SAVING_GOALS = normalizeImportedArray(parsed.savingGoals, SAVING_GOALS)
   TR_DATA = normalizeImportedObject(parsed.trData, TR_DATA)
+  migrateTrPricePrecision(TR_DATA) // vedi bootstrapUserData: stesso motivo, stesso meccanismo
   Object.assign(TR_ETF_META, TR_DATA.customEtfMeta || {}) // vedi bootstrapUserData: stesso motivo, stesso meccanismo
 
   // Scrittura ottimistica: non aspettiamo che Firestore confermi prima
@@ -5677,6 +5682,80 @@ window.initAppAfterLogin = initAppAfterLogin
 // usare come proxy — passo rimandato per ora, per non introdurre un
 // backend nel progetto senza necessità. L'inserimento resta manuale.
 
+// ── PRECISIONE PREZZI E QUOTE (Trade Republic) ──────────────────────────────
+// I prezzi per quota si spostano da "centesimi interi" (2 decimali, come il
+// resto dell'app) a "unità di prezzo" (8 decimali esatti): serve per ETF/
+// azioni/crypto con quotazioni molto piccole o frazionarie, dove arrotondare
+// a 2 decimali già in fase di inserimento farebbe perdere informazione reale
+// (es. un prezzo di 0,00034567€ diventerebbe 0,00€). Restano comunque SEMPRE
+// interi — mai float — solo con una scala 1.000.000 di volte più fine dei
+// centesimi, in linea con l'invariante "niente virgola mobile per il denaro"
+// che vale per tutto il resto dell'app.
+// Le quote invece non sono denaro: restano un numero JS con la virgola, ma
+// arrotondato fino a 10 decimali (prima erano solo 3), per rappresentare
+// fedelmente frazioni di quota molto piccole (es. da Round Up o Saveback).
+const TR_PRICE_SCALE    = 1e8            // 1 unità di prezzo = 1/100.000.000 di euro (8 decimali)
+const TR_PRICE_TO_CENTS = TR_PRICE_SCALE / 100 // = 1e6 — divide un totale "quote × unità di prezzo" per ottenere i centesimi
+const TR_SHARES_SCALE   = 1e10           // le quote si arrotondano fino a 10 decimali
+const TR_SHARES_EPSILON = 1 / TR_SHARES_SCALE // sotto questa soglia una quota si considera "esaurita"
+
+// Converte un prezzo per quota digitato in euro (es. 123,45678901) nella sua
+// rappresentazione intera in unità di prezzo, da salvare nei lotti/asset.
+function priceToUnits(priceEuro){ return Math.round(priceEuro * TR_PRICE_SCALE) }
+
+// L'UNICO punto in cui un totale espresso in "unità di prezzo" (quote ×
+// prezzo in unità) diventa un vero importo monetario: qui, e solo qui,
+// avviene l'arrotondamento a centesimi interi — esattamente come richiede
+// l'invariante finanziaria dell'app.
+function priceUnitsTotalToCents(totalUnits){ return Math.round(totalUnits / TR_PRICE_TO_CENTS) }
+
+// Arrotonda un numero di quote a un massimo di 10 decimali.
+function roundShares(shares){ return Math.round(shares * TR_SHARES_SCALE) / TR_SHARES_SCALE }
+
+// Formattazione per la UI ("solo per la grafica arrotonda a 2 cifre"): un
+// prezzo in unità torna a essere mostrato con lo stesso fmt() in euro a 2
+// decimali già usato ovunque nell'app, semplicemente convertendolo prima in
+// centesimi. La precisione a 8 decimali resta intatta nei dati, si perde
+// solo nella stringa mostrata a schermo.
+function fmtPrice(units){ return fmt(priceUnitsTotalToCents(units)) }
+
+// Mostra un numero di quote senza gli avanzi di virgola mobile che
+// capiterebbero altrimenti con 10 decimali di precisione (es. "0.3" invece
+// di "0.30000000000000004"), mantenendo però i decimali che servono davvero.
+function fmtShares(shares){ return parseFloat(roundShares(shares).toFixed(10)).toString() }
+
+// Migrazione automatica, una tantum e idempotente: converte i vecchi campi
+// *Cents (2 decimali) nei nuovi campi *Units (8 decimali) ovunque compaiano
+// in TR_DATA — lotti, asset, storico operazioni (incluse le istantanee
+// asset/consumedLots usate per l'undo). Se i campi *Units sono già presenti
+// (dati già migrati), non fa nulla: sicura da richiamare ad ogni bootstrap.
+function migrateTrPricePrecision(trData){
+  if(!trData) return trData
+  const migrateAsset = a=>{
+    if(a.currPriceCents !== undefined){
+      a.currPriceUnits = Math.round(a.currPriceCents * TR_PRICE_TO_CENTS)
+      delete a.currPriceCents
+    }
+    ;(a.lots||[]).forEach(migrateLot)
+  }
+  const migrateLot = l=>{
+    if(l.priceCents !== undefined){
+      l.priceUnits = Math.round(l.priceCents * TR_PRICE_TO_CENTS)
+      delete l.priceCents
+    }
+  }
+  ;(trData.assets||[]).forEach(migrateAsset)
+  ;(trData.ops||[]).forEach(op=>{
+    if(op.priceCents !== undefined){
+      op.priceUnits = Math.round(op.priceCents * TR_PRICE_TO_CENTS)
+      delete op.priceCents
+    }
+    ;(op.consumedLots||[]).forEach(migrateLot)
+    if(op.assetSnapshotBefore) migrateAsset(op.assetSnapshotBefore)
+  })
+  return trData
+}
+
 const TR_ETF_META = {
   msci:   {n:'MSCI World ETF',       e:'🌍', c:'#3461ff', bg:'rgba(52,97,255,.1)'},
   sp500:  {n:'S&P 500 ETF',          e:'🇺🇸', c:'#0d9f5e', bg:'rgba(13,159,94,.1)'},
@@ -5774,7 +5853,7 @@ function trEnsureOpIds(){
 function trEnsureLots(asset){
   if(!Array.isArray(asset.lots)){
     asset.lots = asset.shares > 0
-      ? [{ shares: asset.shares, priceCents: asset.avgPriceCents, dt: asset.dt || getCurMonth()+'-01' }]
+      ? [{ shares: asset.shares, priceUnits: priceToUnits((asset.avgPriceCents||0)/100), dt: asset.dt || getCurMonth()+'-01' }]
       : []
   }
   return asset.lots
@@ -5788,22 +5867,25 @@ function trAssetShares(asset){
 // Prezzo medio ponderato sui lotti correnti — NON una media semplice tra i
 // prezzi dei lotti, ma pesata per quante quote ha ciascun lotto, perché un
 // lotto da 10 quote conta più di un lotto da 1 quota nella media finale.
+// Restituisce il prezzo in UNITÀ (8 decimali), non in centesimi: la
+// conversione a centesimi avviene solo quando si calcola un vero importo
+// monetario (vedi trCalcAsset), mai prima.
 function trAssetAvgPrice(asset){
   const lots = trEnsureLots(asset)
   const totalShares = trAssetShares(asset)
   if(totalShares===0) return 0
-  const totalCostCents = lots.reduce((s,l)=>s+l.shares*l.priceCents, 0)
-  return totalCostCents / totalShares
+  const totalCostUnits = lots.reduce((s,l)=>s+l.shares*l.priceUnits, 0)
+  return totalCostUnits / totalShares
 }
 
 function trCalcAsset(a){
   const shares = trAssetShares(a)
-  const avgPriceCents = trAssetAvgPrice(a)
-  const invested = Math.round(shares * avgPriceCents)
-  const current  = Math.round(shares * a.currPriceCents)
+  const avgPriceUnits = trAssetAvgPrice(a)
+  const invested = priceUnitsTotalToCents(shares * avgPriceUnits)
+  const current  = priceUnitsTotalToCents(shares * a.currPriceUnits)
   const gainCents= current - invested
-  const gainPct  = avgPriceCents>0 ? ((a.currPriceCents - avgPriceCents) / avgPriceCents * 100).toFixed(2) : '0.00'
-  return {invested, current, gainCents, gainPct, shares, avgPriceCents}
+  const gainPct  = avgPriceUnits>0 ? ((a.currPriceUnits - avgPriceUnits) / avgPriceUnits * 100).toFixed(2) : '0.00'
+  return {invested, current, gainCents, gainPct, shares, avgPriceUnits}
 }
 
 // Aggiunge un nuovo lotto a un asset esistente (o lo crea se non esiste
@@ -5816,14 +5898,14 @@ function trCalcAsset(a){
 // posseduto prima — usato per decidere se applicare la commissione di
 // acquisto (si paga una sola volta, alla primissima apparizione di un
 // ETF nel portafoglio, indipendentemente da come ci arriva).
-function trAddLotToAsset(etfId, shares, priceCents, dt){
+function trAddLotToAsset(etfId, shares, priceUnits, dt){
   let asset = TR_DATA.assets.find(a=>a.etf===etfId)
   const isNewEtf = !asset
   if(!asset){
-    asset = { id:'e'+genId(), etf:etfId, currPriceCents:priceCents, lots:[] }
+    asset = { id:'e'+genId(), etf:etfId, currPriceUnits:priceUnits, lots:[] }
     TR_DATA.assets.push(asset)
   }
-  trEnsureLots(asset).push({ shares, priceCents, dt })
+  trEnsureLots(asset).push({ shares, priceUnits, dt })
   return { asset, isNewEtf }
 }
 
@@ -5832,36 +5914,36 @@ function trRemoveInvestmentLot(op){
   if(!asset) return false
   const lots = trEnsureLots(asset)
   let sharesToRemove = op.shares || 0
-  const priceCents = op.priceCents || null
+  const priceUnits = op.priceUnits || null
 
-  if(!sharesToRemove && priceCents){
-    sharesToRemove = Math.round(Math.abs(op.amountCents) / priceCents * 1000) / 1000
+  if(!sharesToRemove && priceUnits){
+    sharesToRemove = roundShares((Math.abs(op.amountCents) * TR_PRICE_TO_CENTS) / priceUnits)
   }
   if(!sharesToRemove){
     const reversedLots = [...lots].reverse()
     const match = reversedLots.find(l =>
       (!op.dt || l.dt===op.dt) &&
-      Math.abs(Math.round(l.shares*l.priceCents) - Math.abs(op.amountCents)) <= 1
+      Math.abs(priceUnitsTotalToCents(l.shares*l.priceUnits) - Math.abs(op.amountCents)) <= 1
     ) || reversedLots.find(l =>
-      Math.abs(Math.round(l.shares*l.priceCents) - Math.abs(op.amountCents)) <= 1
+      Math.abs(priceUnitsTotalToCents(l.shares*l.priceUnits) - Math.abs(op.amountCents)) <= 1
     ) || reversedLots[0]
     if(match) sharesToRemove = match.shares
   }
   if(!sharesToRemove) return false
 
   let remaining = sharesToRemove
-  for(let i=lots.length-1; i>=0 && remaining>0.0001; i--){
+  for(let i=lots.length-1; i>=0 && remaining>TR_SHARES_EPSILON; i--){
     const lot = lots[i]
     const sameDate = !op.dt || lot.dt===op.dt || !op.shares
-    const samePrice = !priceCents || lot.priceCents===priceCents
+    const samePrice = !priceUnits || lot.priceUnits===priceUnits
     if(!sameDate || !samePrice) continue
     const take = Math.min(lot.shares, remaining)
-    lot.shares = Math.round((lot.shares - take) * 1000) / 1000
-    remaining = Math.round((remaining - take) * 1000) / 1000
-    if(lot.shares<=0.0001) lots.splice(i,1)
+    lot.shares = roundShares(lot.shares - take)
+    remaining = roundShares(remaining - take)
+    if(lot.shares<=TR_SHARES_EPSILON) lots.splice(i,1)
   }
-  if(remaining>0.0001) return false
-  if(trAssetShares(asset)<=0.0001){
+  if(remaining>TR_SHARES_EPSILON) return false
+  if(trAssetShares(asset)<=TR_SHARES_EPSILON){
     TR_DATA.assets = TR_DATA.assets.filter(a=>a!==asset)
   }
   return true
@@ -5874,7 +5956,7 @@ function trRestoreSoldLots(op){
   if(!asset){
     asset = op.assetSnapshotBefore
       ? JSON.parse(JSON.stringify(op.assetSnapshotBefore))
-      : { id: op.assetId || genId('e'), etf: op.etf, currPriceCents: op.priceCents || 10000, lots: [] }
+      : { id: op.assetId || genId('e'), etf: op.etf, currPriceUnits: op.priceUnits || priceToUnits(100), lots: [] }
     asset.lots = []
     TR_DATA.assets.push(asset)
   }
@@ -5972,8 +6054,8 @@ function processTrPlans(){
       if(isCurrentMonth && dueDate>todayDate) return
 
       const existingAsset = TR_DATA.assets.find(a=>a.etf===plan.etf)
-      const priceCents = existingAsset ? existingAsset.currPriceCents : 10000 // stima di fallback se l'ETF non è mai stato comprato
-      const shares = Math.round(plan.amountCents / priceCents * 1000) / 1000
+      const priceUnits = existingAsset ? existingAsset.currPriceUnits : priceToUnits(100) // stima di fallback (100€) se l'ETF non è mai stato comprato
+      const shares = roundShares((plan.amountCents * TR_PRICE_TO_CENTS) / priceUnits)
       const dt = ym+'-'+String(dueDay).padStart(2,'0')
 
       const feeCents = existingAsset ? 0 : TR_BUY_FEE_CENTS
@@ -5982,12 +6064,12 @@ function processTrPlans(){
       // saltiamo questo mese senza bloccare gli altri piani (lo stesso
       // approccio già usato per i trasferimenti ricorrenti finanziari).
       if(TR_DATA.cashCents < plan.amountCents + feeCents) return
-      trAddLotToAsset(plan.etf, shares, priceCents, dt)
+      trAddLotToAsset(plan.etf, shares, priceUnits, dt)
       TR_DATA.cashCents -= (plan.amountCents + feeCents)
 
       TR_DATA.ops.unshift({
         id: genId('op'), type:'buy', etf:plan.etf, amountCents:plan.amountCents,
-        shares, priceCents, dt, fee:feeCents
+        shares, priceUnits, dt, fee:feeCents
       })
 
       plan.lastAppliedYm = ym
@@ -6030,7 +6112,13 @@ function trApplyCardAutomations(accId, type, expenseAmountCents, dt){
     }
   }
   if(TR_DATA.roundupOn){
-    const nextEuroCents = Math.ceil(expenseAmountCents/100)*100
+    // Arrotonda SEMPRE al prossimo euro intero — anche quando la spesa è
+    // già un importo tondo (es. 2,00€ → arrotonda comunque a 3,00€,
+    // generando 1€ di accantonamento). Math.floor(...)+100 (invece di
+    // Math.ceil) garantisce questo: su un importo già multiplo di 100
+    // centesimi, Math.ceil lo lascerebbe invariato (spare=0), qui invece
+    // si passa sempre e comunque all'euro successivo.
+    const nextEuroCents = Math.floor(expenseAmountCents/100)*100 + 100
     const spareCents = nextEuroCents - expenseAmountCents // 0-99 centesimi di "resto" verso l'euro superiore
     const amt = Math.round(spareCents * TR_DATA.roundupMultiplier)
     // Il round up è denaro tuo: se la liquidità non basta nemmeno per
@@ -6095,13 +6183,13 @@ function trTryInvestPending(kind, etfId, dueYmd, fromOwnCash){
   // TR) — l'accantonato NON si perde, resta lì in attesa.
   if(cashNeeded>0 && TR_DATA.cashCents < cashNeeded) return false
 
-  const priceCents = existingAsset ? existingAsset.currPriceCents : 10000 // stessa stima di fallback dei piani automatici
-  const shares = Math.round(pendingCents / priceCents * 1000) / 1000
-  trAddLotToAsset(etfId, shares, priceCents, dueYmd)
+  const priceUnits = existingAsset ? existingAsset.currPriceUnits : priceToUnits(100) // stessa stima di fallback dei piani automatici
+  const shares = roundShares((pendingCents * TR_PRICE_TO_CENTS) / priceUnits)
+  trAddLotToAsset(etfId, shares, priceUnits, dueYmd)
   if(cashNeeded>0) TR_DATA.cashCents -= cashNeeded
   TR_DATA.ops.unshift({
     id: genId('op'), type: kind, etf: etfId, amountCents: pendingCents,
-    shares, priceCents, dt: dueYmd, fee: feeCents
+    shares, priceUnits, dt: dueYmd, fee: feeCents
   })
   TR_DATA[pendingField] = 0
   TR_DATA[lastField] = dueYmd
@@ -6229,7 +6317,7 @@ function renderTR(){
         <div class="tr-asset-icon" style="background:${m.bg}">${m.e}</div>
         <div class="tr-asset-info">
           <div class="tr-asset-name">${m.n}</div>
-          <div class="tr-asset-sub">${shares} quote · ${fmt(a.currPriceCents)}/quota</div>
+          <div class="tr-asset-sub">${fmtShares(shares)} quote · ${fmtPrice(a.currPriceUnits)}/quota</div>
         </div>
         <div class="tr-asset-right">
           <div class="tr-asset-val">${fmt(current)}</div>
@@ -6864,9 +6952,9 @@ function openTrAssetSheet(editId){
     // 'custom' del menu — la chiave vera resta agganciata all'asset e
     // viene riusata al salvataggio (vedi saveTrAsset).
     document.getElementById('tr-a-etf').value = isCustomEtfKey(asset.etf) ? 'custom' : asset.etf
-    document.getElementById('tr-a-shares').value = trAssetShares(asset)
-    document.getElementById('tr-a-avg').value = (trAssetAvgPrice(asset) / 100).toFixed(2)
-    document.getElementById('tr-a-curr').value = (asset.currPriceCents / 100).toFixed(2)
+    document.getElementById('tr-a-shares').value = fmtShares(trAssetShares(asset))
+    document.getElementById('tr-a-avg').value = parseFloat((trAssetAvgPrice(asset) / TR_PRICE_SCALE).toFixed(8)).toString()
+    document.getElementById('tr-a-curr').value = parseFloat((asset.currPriceUnits / TR_PRICE_SCALE).toFixed(8)).toString()
     document.getElementById('tr-a-currency').value = asset.currency || 'EUR'
     if(isCustomEtfKey(asset.etf)){
       document.getElementById('tr-a-custom-group').style.display = 'block'
@@ -6937,9 +7025,9 @@ function saveTrAsset(){
   if(!curr || curr <= 0)     { showToast('⚠️ Inserisci il prezzo corrente'); return }
   if(etfSelectVal === 'custom' && !custom){ showToast('⚠️ Inserisci un nome'); return }
 
-  const sharesRounded = Math.round(shares * 1000) / 1000
-  const avgCents = Math.round(avg * 100)
-  const newCostCents = Math.round(sharesRounded * avgCents) // quanto varrebbe, ai prezzi indicati, la posizione dopo il salvataggio
+  const sharesRounded = roundShares(shares)
+  const avgUnits = priceToUnits(avg)
+  const newCostCents = priceUnitsTotalToCents(sharesRounded * avgUnits) // quanto varrebbe, ai prezzi indicati, la posizione dopo il salvataggio
   const todayYmd = new Date().toISOString().split('T')[0]
 
   if(editId){
@@ -6969,12 +7057,12 @@ function saveTrAsset(){
     const assetData = {
       etf,
       customName: etfSelectVal === 'custom' ? custom : null,
-      currPriceCents:  Math.round(curr * 100),
+      currPriceUnits:  priceToUnits(curr),
       currency,
-      lots: [{ shares: sharesRounded, priceCents: avgCents, dt: todayYmd }]
+      lots: [{ shares: sharesRounded, priceUnits: avgUnits, dt: todayYmd }]
     }
 
-    const oldCostCents = TR_DATA.assets[idx].lots.reduce((s,l)=>s+Math.round(l.shares*l.priceCents), 0)
+    const oldCostCents = TR_DATA.assets[idx].lots.reduce((s,l)=>s+priceUnitsTotalToCents(l.shares*l.priceUnits), 0)
     const deltaCents = newCostCents - oldCostCents
     if(deltaCents > 0 && TR_DATA.cashCents < deltaCents){
       showToast(`⚠️ Liquidità Trade Republic insufficiente (disponibile: ${fmt(TR_DATA.cashCents)}, servono: ${fmt(deltaCents)})`)
@@ -6986,7 +7074,7 @@ function saveTrAsset(){
     if(deltaCents !== 0){
       TR_DATA.ops.unshift({
         id: genId('op'), type:'manual', etf, amountCents: deltaCents,
-        shares: sharesRounded, priceCents: avgCents, dt: todayYmd, fee: 0,
+        shares: sharesRounded, priceUnits: avgUnits, dt: todayYmd, fee: 0,
         assetSnapshotBefore
       })
     }
@@ -7026,9 +7114,9 @@ function saveTrAsset(){
     const assetData = {
       etf,
       customName: etfSelectVal === 'custom' ? custom : null,
-      currPriceCents:  Math.round(curr * 100),
+      currPriceUnits:  priceToUnits(curr),
       currency,
-      lots: [{ shares: sharesRounded, priceCents: avgCents, dt: todayYmd }]
+      lots: [{ shares: sharesRounded, priceUnits: avgUnits, dt: todayYmd }]
     }
 
     const isNewEtf = !existingAsset
@@ -7039,8 +7127,8 @@ function saveTrAsset(){
       return
     }
     if(existingAsset){
-      trEnsureLots(existingAsset).push({ shares: sharesRounded, priceCents: avgCents, dt: todayYmd })
-      existingAsset.currPriceCents = Math.round(curr * 100) // il prezzo corrente indicato ora aggiorna comunque la valorizzazione dell'intera posizione
+      trEnsureLots(existingAsset).push({ shares: sharesRounded, priceUnits: avgUnits, dt: todayYmd })
+      existingAsset.currPriceUnits = priceToUnits(curr) // il prezzo corrente indicato ora aggiorna comunque la valorizzazione dell'intera posizione
       existingAsset.currency = currency
       if(etfSelectVal === 'custom') existingAsset.customName = custom
     } else {
@@ -7049,7 +7137,7 @@ function saveTrAsset(){
     TR_DATA.cashCents -= cashNeeded
     TR_DATA.ops.unshift({
       id: genId('op'), type:'manual', etf, amountCents: newCostCents,
-      shares: sharesRounded, priceCents: avgCents, dt: todayYmd, fee: feeCents
+      shares: sharesRounded, priceUnits: avgUnits, dt: todayYmd, fee: feeCents
     })
     showToast('✅ Posizione aggiunta!')
   }
@@ -7111,8 +7199,8 @@ function openTrSellSheet(assetId){
 
   document.getElementById('tr-sell-asset-id').value = assetId
   document.getElementById('tr-sell-asset-name').textContent = m.n
-  document.getElementById('tr-sell-owned-shares').textContent = shares
-  document.getElementById('tr-sell-curr-price').textContent = fmt(asset.currPriceCents)
+  document.getElementById('tr-sell-owned-shares').textContent = fmtShares(shares)
+  document.getElementById('tr-sell-curr-price').textContent = fmtPrice(asset.currPriceUnits)
   document.getElementById('tr-sell-shares').value = ''
   document.getElementById('tr-sell-shares').max = shares
   document.getElementById('tr-sell-preview').style.display = 'none'
@@ -7132,7 +7220,7 @@ function trSellSetPct(pct){
   const asset = TR_DATA.assets.find(a => a.id === assetId)
   if(!asset) return
   const totalShares = trAssetShares(asset)
-  const shares = Math.round(totalShares * pct / 100 * 1000) / 1000
+  const shares = roundShares(totalShares * pct / 100)
   document.getElementById('tr-sell-shares').value = shares
   trSellPreviewUpdate()
 }
@@ -7148,21 +7236,22 @@ function trSimulateFifoSell(asset, sharesToSell){
   const consumedLots = []
 
   for(const lot of lots){
-    if(remaining <= 0.0001) break
+    if(remaining <= TR_SHARES_EPSILON) break
     const takeFromLot = Math.min(lot.shares, remaining)
-    // FIX: takeFromLot è un numero di quote (float, es. 3.256) — moltiplicarlo
-    // per priceCents e sommarlo direttamente rendeva costBasisCents un float,
-    // nonostante il nome suggerisca centesimi interi. Arrotondiamo ad ogni
-    // passaggio così l'invariante "solo interi in centesimi" vale anche qui,
-    // non solo nel valore finale restituito al chiamante.
-    costBasisCents += Math.round(takeFromLot * lot.priceCents)
-    consumedLots.push({ shares: takeFromLot, priceCents: lot.priceCents, dt: lot.dt })
-    lot.shares -= takeFromLot
-    remaining -= takeFromLot
+    // FIX: takeFromLot è un numero di quote (float) — moltiplicarlo per
+    // priceUnits e sommarlo direttamente renderebbe costBasisCents un
+    // float, nonostante il nome suggerisca centesimi interi. Convertiamo
+    // ad ogni passaggio con priceUnitsTotalToCents (che arrotonda),
+    // così l'invariante "solo interi in centesimi" vale anche qui, non
+    // solo nel valore finale restituito al chiamante.
+    costBasisCents += priceUnitsTotalToCents(takeFromLot * lot.priceUnits)
+    consumedLots.push({ shares: takeFromLot, priceUnits: lot.priceUnits, dt: lot.dt })
+    lot.shares = roundShares(lot.shares - takeFromLot)
+    remaining = roundShares(remaining - takeFromLot)
   }
 
-  const remainingLots = lots.filter(l => l.shares > 0.0001)
-  return { costBasisCents, consumedLots, remainingLots, fullyCovered: remaining <= 0.0001 }
+  const remainingLots = lots.filter(l => l.shares > TR_SHARES_EPSILON)
+  return { costBasisCents, consumedLots, remainingLots, fullyCovered: remaining <= TR_SHARES_EPSILON }
 }
 
 const TR_SELL_FEE_CENTS = 100 // commissione fissa di vendita, coerente con quella già applicata sugli acquisti
@@ -7182,7 +7271,7 @@ function trSellPreviewUpdate(){
   }
 
   const ownedShares = trAssetShares(asset)
-  if(sharesToSell > ownedShares + 0.0001){
+  if(sharesToSell > ownedShares + TR_SHARES_EPSILON){
     preview.style.display = 'none'
     confirmBtn.disabled = true
     confirmBtn.style.opacity = '.5'
@@ -7190,7 +7279,7 @@ function trSellPreviewUpdate(){
     return
   }
 
-  const grossCents = Math.round(sharesToSell * asset.currPriceCents)
+  const grossCents = priceUnitsTotalToCents(sharesToSell * asset.currPriceUnits)
   const netCents = grossCents - TR_SELL_FEE_CENTS
   const { costBasisCents } = trSimulateFifoSell(asset, sharesToSell)
   const pnlCents = grossCents - Math.round(costBasisCents)
@@ -7231,13 +7320,13 @@ function trConfirmSell(){
   if(!asset || !sharesToSell || sharesToSell <= 0) return
 
   const ownedShares = trAssetShares(asset)
-  if(sharesToSell > ownedShares + 0.0001){
+  if(sharesToSell > ownedShares + TR_SHARES_EPSILON){
     showToast('⚠️ Non possiedi così tante quote')
     return
   }
 
   const m = TR_ETF_META[asset.etf] || TR_ETF_META.custom
-  const grossCents = Math.round(sharesToSell * asset.currPriceCents)
+  const grossCents = priceUnitsTotalToCents(sharesToSell * asset.currPriceUnits)
   const netCents = grossCents - TR_SELL_FEE_CENTS
 
   // Snapshot PRIMA di toccare qualunque cosa: lotti originali dell'asset
@@ -7262,7 +7351,7 @@ function trConfirmSell(){
 
   // Se la vendita ha esaurito completamente la posizione, rimuoviamo
   // l'asset dal portafoglio invece di lasciarlo a zero quote.
-  if(trAssetShares(asset) <= 0.0001){
+  if(trAssetShares(asset) <= TR_SHARES_EPSILON){
     TR_DATA.assets = TR_DATA.assets.filter(a => a.id !== assetId)
   }
 
@@ -7273,7 +7362,7 @@ function trConfirmSell(){
 
   TR_DATA.ops.unshift({
     id: genId('op'), type: 'sell', etf: asset.etf, amountCents: grossCents,
-    shares: sharesToSell, priceCents: asset.currPriceCents,
+    shares: sharesToSell, priceUnits: asset.currPriceUnits,
     consumedLots, assetId, assetSnapshotBefore: _trSellSnapshot.assetSnapshot,
     dt: new Date().toISOString().split('T')[0], fee: TR_SELL_FEE_CENTS,
     _undoMarker: sellOpMarker
