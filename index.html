@@ -1344,6 +1344,12 @@ if(localStorage.getItem('finapp-theme') === 'dark'){
             <option value="">Tutte le categorie</option>
           </select>
         </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label class="form-label">Metodo di pagamento</label>
+          <select class="form-input" id="t-acc" onchange="renderTxTab()">
+            <option value="">Tutti i metodi</option>
+          </select>
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Dal</label>
@@ -2572,6 +2578,12 @@ async function bootstrapUserData(){
   SAVING_GOALS = savingGoals  ?? []
   RECURRING    = recurring    ?? []
   TR_DATA      = trData       ?? structuredClone(DEMO_TR_DATA)
+
+  // Ripristina in TR_ETF_META (cache di sessione) i nomi/emoji/colori degli
+  // ETF e asset personalizzati salvati in precedenza: senza questo, dopo
+  // ogni refresh le posizioni personalizzate mostrerebbero di nuovo
+  // l'etichetta generica "Personalizzato" invece del nome reale digitato.
+  Object.assign(TR_ETF_META, TR_DATA.customEtfMeta || {})
 
   if(isFirstLogin){
     // Primo accesso in assoluto per questo utente: salva subito i dati
@@ -4163,6 +4175,7 @@ function applyImportedBackup(parsed){
   SAVINGS_GOAL = normalizeImportedObject(parsed.savingsGoal, SAVINGS_GOAL)
   SAVING_GOALS = normalizeImportedArray(parsed.savingGoals, SAVING_GOALS)
   TR_DATA = normalizeImportedObject(parsed.trData, TR_DATA)
+  Object.assign(TR_ETF_META, TR_DATA.customEtfMeta || {}) // vedi bootstrapUserData: stesso motivo, stesso meccanismo
 
   // Scrittura ottimistica: non aspettiamo che Firestore confermi prima
   // di aggiornare l'interfaccia. Se una di queste fallisse (rete assente),
@@ -4424,10 +4437,34 @@ function renderHomeHistory(){
 }
 
 // ── TRANSAZIONI TAB ──────────────────────────────────────────────────────────
+// Il filtro "Metodo di pagamento" riusa lo stesso concetto già presente nel
+// grafico "Uscite per metodo di pagamento" (tab Grafici): qui "metodo di
+// pagamento" è semplicemente il CONTO con cui è stata registrata la
+// transazione (campo t.acc), non un dato separato da gestire altrove.
+// Le opzioni si ricostruiscono da ACCOUNTS ad ogni render della tab, così
+// restano sempre aggiornate anche se un conto viene aggiunto, rinominato
+// o eliminato nel frattempo, senza dover agganciare questa funzione a ogni
+// singolo punto del codice che modifica ACCOUNTS.
+function populateTxAccFilter(){
+  const sel = document.getElementById('t-acc')
+  if(!sel) return
+  const current = sel.value
+  // Rigenera le opzioni solo se sono davvero cambiate (conteggio diverso, o
+  // la voce selezionata non esiste più): evita di ricreare il DOM ad ogni
+  // singolo tasto premuto nel campo di ricerca, che richiama renderTxTab().
+  const expectedCount = ACCOUNTS.length + 1 // +1 per "Tutti i metodi"
+  if(sel.options.length === expectedCount && (!current || ACCOUNTS.some(a=>a.id===current))) return
+  sel.innerHTML = '<option value="">Tutti i metodi</option>' +
+    ACCOUNTS.map(a=>`<option value="${a.id}">${a.e} ${escapeHtml(a.n)}</option>`).join('')
+  sel.value = ACCOUNTS.some(a=>a.id===current) ? current : ''
+}
+
 function renderTxTab(){
+  populateTxAccFilter()
   const q=(document.getElementById('t-search')||{value:''}).value.trim()
   const type=(document.getElementById('t-type')||{value:''}).value
   const catFilter=(document.getElementById('t-cat')||{value:''}).value
+  const accFilter=(document.getElementById('t-acc')||{value:''}).value
   const dateFrom=(document.getElementById('t-date-from')||{value:''}).value
   const dateTo=(document.getElementById('t-date-to')||{value:''}).value
 
@@ -4442,6 +4479,7 @@ function renderTxTab(){
   }
   if(type) list=list.filter(t=>t.t===type)
   if(catFilter) list=list.filter(t=>t.cat===catFilter)
+  if(accFilter) list=list.filter(t=>t.acc===accFilter)
   if(dateFrom) list=list.filter(t=>t.dt>=dateFrom)
   if(dateTo) list=list.filter(t=>t.dt<=dateTo)
 
@@ -4461,6 +4499,7 @@ function toggleTxAdvancedFilters(){
 }
 function clearTxAdvancedFilters(){
   document.getElementById('t-cat').value=''
+  document.getElementById('t-acc').value=''
   document.getElementById('t-date-from').value=''
   document.getElementById('t-date-to').value=''
   renderTxTab()
@@ -5443,6 +5482,21 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
     // pagate da Pocket senza alcun collegamento reale al saldo.
     const pocketId = document.getElementById('rt-pocket-select').value || null
 
+    // Quota condivisa (se questa spesa diventa una ricorrente con un
+    // Pocket collegato e un importo "atteso dagli altri" impostato): va
+    // calcolata QUI, PRIMA di registrare la transazione, non più dopo —
+    // altrimenti la primissima occorrenza di un abbonamento condiviso
+    // registrava l'INTERO importo (es. 21€) invece della sola quota
+    // personale (es. 3,50€), disallineandosi da tutti i mesi successivi
+    // (generati da processRecurringTransactions, che usa correttamente
+    // solo la quota personale fin dall'inizio). Il prelievo dal Pocket,
+    // qualche riga sotto, resta invece sull'importo PIENO: è lì che il
+    // denaro esce davvero, la scomposizione in quote è solo interna a
+    // FinApp.
+    const sharedCostVal=_isRecurringFlag ? parseFloat(document.getElementById('rt-shared-cost').value) : NaN
+    const sharedCostCents=(_isRecurringFlag && pocketId && sharedCostVal>0) ? Math.round(sharedCostVal*100) : 0
+    const personalCostCents = amountCents - sharedCostCents
+
     // Applichiamo SUBITO il movimento sul saldo per questa transazione —
     // sul Pocket se ne è stato scelto uno (che aggiorna anche il conto
     // reale collegato), altrimenti DIRETTAMENTE sul conto. Prima, una
@@ -5451,6 +5505,9 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
     // mostrato in Home/Conti restava fermo. Corretto qui, riusando la
     // stessa funzione centralizzata usata da modifica/cancellazione,
     // invece di ripetere la logica una terza volta.
+    // Nota: qui l'importo resta SEMPRE quello pieno (amountCents), anche
+    // per un abbonamento condiviso — è l'intero addebito che esce
+    // davvero dal Pocket/conto, coerente con processRecurringTransactions.
     const newTxForBalance = {t:_type, acc:accId, a:amountCents, pocketId, d:desc}
     const pocketMoveOk = reapplyTxBalanceEffect(newTxForBalance)
     if(!pocketMoveOk){
@@ -5459,13 +5516,16 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
     }
 
     TX.unshift({
-      id:genId('tx'), t:_type, d:desc, cat:catId, acc:accId, a:amountCents, dt:date,
+      id:genId('tx'), t:_type, d:desc, cat:catId, acc:accId, a:personalCostCents, dt:date,
       note:note||'',
       pocketId: pocketId || null // traccia da quale Pocket è stata pagata/accreditata, se applicabile
     })
     // Saveback/Round Up: si attivano SOLO qui (creazione di una nuova spesa),
     // mai in modifica — altrimenti ogni volta che correggi un importo
     // riceveresti un secondo cashback/arrotondamento per la stessa spesa.
+    // Si basano sull'importo PIENO addebitato sulla carta (amountCents),
+    // non sulla quota personale: coerente con trApplyCardAutomations
+    // chiamata da processRecurringTransactions per i mesi successivi.
     trApplyCardAutomations(accId, _type, amountCents, date)
     // Se l'utente ha attivato "Rendi ricorrente", il giorno del mese
     // viene dedotto direttamente dalla data di questa transazione:
@@ -5473,8 +5533,6 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
     if(_isRecurringFlag){
       const dayOfMonth=parseInt(date.split('-')[2],10)
       const txYm=date.slice(0,7) // "YYYY-MM" della transazione appena inserita (può essere un mese passato)
-      const sharedCostVal=parseFloat(document.getElementById('rt-shared-cost').value)
-      const sharedCostCents=(pocketId && sharedCostVal>0) ? Math.round(sharedCostVal*100) : 0
       const newRec = addRecurring({
         desc, amountCents, type:_type,
         catId, accId, day:dayOfMonth, pocketId, sharedCostCents,
@@ -5626,6 +5684,33 @@ const TR_ETF_META = {
   em:     {n:'Emerging Markets ETF', e:'🌏', c:'#f4711a', bg:'rgba(244,113,26,.1)'},
   europe: {n:'MSCI Europe ETF',      e:'🇪🇺', c:'#0ea5e9', bg:'rgba(14,165,233,.12)'},
   custom: {n:'Personalizzato',       e:'✏️', c:'#717892', bg:'rgba(107,114,128,.1)'},
+}
+
+// Un asset "personalizzato" può essere identificato in due modi nei dati:
+// - 'custom' (letterale): il vecchio comportamento, quando esisteva un solo
+//   bucket condiviso per TUTTI gli asset personalizzati (bug: due ETF
+//   personalizzate diverse finivano fuse nella stessa posizione).
+// - 'custom_xxxxx' (chiave generata da genId('custom')): il comportamento
+//   nuovo, una chiave univoca per OGNI posizione personalizzata, così che
+//   due ETF/azioni personalizzate con nomi diversi restino due posizioni
+//   separate in portafoglio invece di fondersi in una sola.
+// Questo helper riconosce entrambe le forme, per restare compatibile con
+// eventuali asset già salvati prima di questa correzione.
+function isCustomEtfKey(key){
+  return key === 'custom' || (typeof key === 'string' && key.startsWith('custom_'))
+}
+
+// TR_ETF_META è solo una cache in memoria: ad ogni refresh della pagina
+// riparte con i soli ETF predefiniti. I metadati (nome, emoji, colore) di
+// ogni asset/piano personalizzato devono invece sopravvivere ai reload e
+// sincronizzarsi tra dispositivi, quindi vanno scritti anche dentro
+// TR_DATA (che fsSave('trData', TR_DATA) porta su Firestore). Ogni punto
+// del codice che crea una chiave 'custom_xxxxx' deve passare da qui,
+// invece di scrivere direttamente su TR_ETF_META come accadeva prima.
+function registerCustomEtfMeta(key, meta){
+  TR_ETF_META[key] = meta
+  TR_DATA.customEtfMeta = TR_DATA.customEtfMeta || {}
+  TR_DATA.customEtfMeta[key] = meta
 }
 
 // Dati demo per Trade Republic, mostrati solo al primissimo accesso di
@@ -6774,14 +6859,18 @@ function openTrAssetSheet(editId){
     if(!asset) return
     title.textContent = 'Modifica posizione'
     editInput.value = editId
-    document.getElementById('tr-a-etf').value = asset.etf
+    // Il <select> ha una sola opzione 'custom' nel markup: se l'asset usa
+    // una chiave univoca (custom_xxxxx), selezioniamo comunque la voce
+    // 'custom' del menu — la chiave vera resta agganciata all'asset e
+    // viene riusata al salvataggio (vedi saveTrAsset).
+    document.getElementById('tr-a-etf').value = isCustomEtfKey(asset.etf) ? 'custom' : asset.etf
     document.getElementById('tr-a-shares').value = trAssetShares(asset)
     document.getElementById('tr-a-avg').value = (trAssetAvgPrice(asset) / 100).toFixed(2)
     document.getElementById('tr-a-curr').value = (asset.currPriceCents / 100).toFixed(2)
     document.getElementById('tr-a-currency').value = asset.currency || 'EUR'
-    if(asset.etf === 'custom'){
+    if(isCustomEtfKey(asset.etf)){
       document.getElementById('tr-a-custom-group').style.display = 'block'
-      document.getElementById('tr-a-custom').value = asset.customName || ''
+      document.getElementById('tr-a-custom').value = (TR_ETF_META[asset.etf]?.n) || asset.customName || ''
     }
     // Se l'asset ha più di un lotto (acquisti reali in momenti diversi),
     // avvisiamo che la modifica li fonderà in un unico lotto — perdendo
@@ -6835,7 +6924,7 @@ function trCalcPreview(){
 }
 
 function saveTrAsset(){
-  const etf      = document.getElementById('tr-a-etf').value
+  const etfSelectVal = document.getElementById('tr-a-etf').value // valore grezzo del <select>: 'msci', 'sp500', ... oppure 'custom'
   const custom   = document.getElementById('tr-a-custom').value.trim()
   const shares   = parseFloat(document.getElementById('tr-a-shares').value)
   const avg      = parseFloat(document.getElementById('tr-a-avg').value)
@@ -6846,36 +6935,12 @@ function saveTrAsset(){
   if(!shares || shares <= 0){ showToast('⚠️ Inserisci il numero di quote'); return }
   if(!avg || avg <= 0)       { showToast('⚠️ Inserisci il prezzo medio');    return }
   if(!curr || curr <= 0)     { showToast('⚠️ Inserisci il prezzo corrente'); return }
-  if(etf === 'custom' && !custom){ showToast('⚠️ Inserisci un nome'); return }
-
-  // If custom, update or create meta entry
-  if(etf === 'custom' && custom){
-    TR_ETF_META['custom'] = {
-      n: custom, e: '✏️', c: '#717892', bg: 'rgba(107,114,128,.1)'
-    }
-  }
+  if(etfSelectVal === 'custom' && !custom){ showToast('⚠️ Inserisci un nome'); return }
 
   const sharesRounded = Math.round(shares * 1000) / 1000
   const avgCents = Math.round(avg * 100)
   const newCostCents = Math.round(sharesRounded * avgCents) // quanto varrebbe, ai prezzi indicati, la posizione dopo il salvataggio
   const todayYmd = new Date().toISOString().split('T')[0]
-
-  // Nota: l'inserimento/modifica manuale crea sempre un asset con un SOLO
-  // lotto equivalente alle quote+prezzo indicati. Per posizioni già composte
-  // da più acquisti reali nel tempo, i lotti successivi si aggiungono solo
-  // tramite acquisti veri (piano automatico, saveback, round up) — questo
-  // sheet serve per l'inserimento iniziale di una posizione che già possiedi.
-  const assetData = {
-    etf,
-    customName: etf === 'custom' ? custom : null,
-    currPriceCents:  Math.round(curr * 100),
-    currency,
-    lots: [{
-      shares: sharesRounded,
-      priceCents: avgCents,
-      dt: todayYmd
-    }]
-  }
 
   if(editId){
     // Update existing — trattiamo la differenza tra il vecchio e il nuovo
@@ -6885,6 +6950,30 @@ function saveTrAsset(){
     // era già posseduto prima della modifica.
     const idx = TR_DATA.assets.findIndex(a => a.id === editId)
     if(idx === -1) return
+
+    // Chiave etf da usare per QUESTO asset dopo il salvataggio:
+    // - se l'asset era già personalizzato (custom o custom_xxxxx), ne
+    //   mantiene la propria chiave univoca — non ne genera una nuova ad
+    //   ogni modifica, altrimenti perderebbe il collegamento con le
+    //   operazioni storiche già registrate con la vecchia chiave.
+    // - se invece l'utente sta trasformando un ETF predefinito in uno
+    //   personalizzato, qui nasce una chiave nuova, univoca per questa
+    //   posizione (stesso meccanismo già usato per i piani di accumulo).
+    // - se resta/torna un ETF predefinito, si usa semplicemente il suo id.
+    let etf = etfSelectVal
+    if(etfSelectVal === 'custom'){
+      etf = isCustomEtfKey(TR_DATA.assets[idx].etf) ? TR_DATA.assets[idx].etf : genId('custom')
+      registerCustomEtfMeta(etf, { n: custom, e: '✏️', c: '#717892', bg: 'rgba(107,114,128,.1)' })
+    }
+
+    const assetData = {
+      etf,
+      customName: etfSelectVal === 'custom' ? custom : null,
+      currPriceCents:  Math.round(curr * 100),
+      currency,
+      lots: [{ shares: sharesRounded, priceCents: avgCents, dt: todayYmd }]
+    }
+
     const oldCostCents = TR_DATA.assets[idx].lots.reduce((s,l)=>s+Math.round(l.shares*l.priceCents), 0)
     const deltaCents = newCostCents - oldCostCents
     if(deltaCents > 0 && TR_DATA.cashCents < deltaCents){
@@ -6910,7 +6999,38 @@ function saveTrAsset(){
     // diventa un NUOVO LOTTO sull'asset esistente (stessa riga, cronologia
     // FIFO corretta) invece di creare una seconda riga duplicata per lo
     // stesso strumento.
-    const existingAsset = TR_DATA.assets.find(a => a.etf === etf)
+    let etf = etfSelectVal
+    let existingAsset
+    if(etfSelectVal === 'custom'){
+      // Un asset personalizzato non ha un id fisso come 'msci' o 'sp500':
+      // per capire se "è lo stesso" di uno già in portafoglio confrontiamo
+      // il NOME digitato (senza distinguere maiuscole/minuscole o spazi
+      // superflui) con quelli già registrati. Nome uguale → stesso asset,
+      // nuovo lotto. Nome diverso → nuova posizione con la sua chiave
+      // univoca (genId('custom')), così due ETF personalizzate diverse
+      // non si fondono più per errore nella stessa riga.
+      const customLower = custom.toLowerCase()
+      existingAsset = TR_DATA.assets.find(a =>
+        isCustomEtfKey(a.etf) && ((TR_ETF_META[a.etf]?.n || a.customName || '').trim().toLowerCase() === customLower)
+      )
+      if(existingAsset){
+        etf = existingAsset.etf
+      } else {
+        etf = genId('custom')
+        registerCustomEtfMeta(etf, { n: custom, e: '✏️', c: '#717892', bg: 'rgba(107,114,128,.1)' })
+      }
+    } else {
+      existingAsset = TR_DATA.assets.find(a => a.etf === etf)
+    }
+
+    const assetData = {
+      etf,
+      customName: etfSelectVal === 'custom' ? custom : null,
+      currPriceCents:  Math.round(curr * 100),
+      currency,
+      lots: [{ shares: sharesRounded, priceCents: avgCents, dt: todayYmd }]
+    }
+
     const isNewEtf = !existingAsset
     const feeCents = isNewEtf ? TR_BUY_FEE_CENTS : 0
     const cashNeeded = newCostCents + feeCents
@@ -6922,7 +7042,7 @@ function saveTrAsset(){
       trEnsureLots(existingAsset).push({ shares: sharesRounded, priceCents: avgCents, dt: todayYmd })
       existingAsset.currPriceCents = Math.round(curr * 100) // il prezzo corrente indicato ora aggiorna comunque la valorizzazione dell'intera posizione
       existingAsset.currency = currency
-      if(etf === 'custom') existingAsset.customName = custom
+      if(etfSelectVal === 'custom') existingAsset.customName = custom
     } else {
       TR_DATA.assets.push({ id: genId('e'), ...assetData }) // ← FIX: prima 'e'+Date.now(), stesso rischio di collisione
     }
@@ -7278,7 +7398,7 @@ function saveTrPlan(){
   let planEtfKey = etf
   if(etf==='custom'){
     planEtfKey = genId('custom') // ← FIX: prima 'custom_'+Date.now(), stesso rischio di collisione
-    TR_ETF_META[planEtfKey] = {n: customName, e:'✏️', c:'#717892', bg:'rgba(107,114,128,.1)'}
+    registerCustomEtfMeta(planEtfKey, {n: customName, e:'✏️', c:'#717892', bg:'rgba(107,114,128,.1)'})
   }
 
   TR_DATA.plans.push({id:genId('p'),etf:planEtfKey,amountCents:Math.round(amount*100),day:parseInt(day)}) // ← FIX: prima 'p'+Date.now()
