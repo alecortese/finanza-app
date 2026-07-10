@@ -1329,10 +1329,16 @@ if(localStorage.getItem('finapp-theme') === 'dark'){
       </div>
     </div>
 
-    <div style="padding:0 clamp(10px,3vw,16px);margin-bottom:8px">
+    <div style="padding:0 clamp(10px,3vw,16px);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
       <span onclick="toggleTxAdvancedFilters()" id="tx-adv-toggle"
         style="font-size:.76rem;font-weight:700;color:var(--blue);cursor:pointer;display:inline-flex;align-items:center;gap:4px">
         ⚙️ Filtri avanzati <span id="tx-adv-chevron">▾</span>
+      </span>
+      <!-- Visibile solo se almeno un filtro è attivo (testo, tipo,
+           categoria, metodo o data): niente da azzerare, niente bottone. -->
+      <span onclick="clearTxAdvancedFilters()" id="tx-reset-all-btn"
+        style="display:none;font-size:.76rem;font-weight:700;color:var(--text3);cursor:pointer;align-items:center;gap:4px">
+        ✕ Azzera filtri
       </span>
     </div>
 
@@ -1359,9 +1365,6 @@ if(localStorage.getItem('finapp-theme') === 'dark'){
             <label class="form-label">Al</label>
             <input class="form-input" type="date" id="t-date-to" onchange="renderTxTab()">
           </div>
-        </div>
-        <div style="text-align:right;margin-top:4px">
-          <span onclick="clearTxAdvancedFilters()" style="font-size:.72rem;color:var(--text3);font-weight:700;cursor:pointer">Azzera filtri</span>
         </div>
       </div>
     </div>
@@ -1965,6 +1968,7 @@ if(localStorage.getItem('finapp-theme') === 'dark'){
 
     <div class="section-header" style="padding:0 0 8px">
       <div class="section-title" style="font-size:.85rem">📋 Storico movimenti</div>
+      <span onclick="confirmClearPocketHistory()" id="pocket-clear-history-btn" style="display:none;font-size:.72rem;color:var(--text3);font-weight:700;cursor:pointer">Svuota storico</span>
     </div>
     <div id="pocket-history-list" style="max-height:240px;overflow-y:auto;margin-bottom:18px"></div>
 
@@ -2687,8 +2691,12 @@ function getPockets(accId){
 // Migrazione automatica: i Pocket creati prima dell'introduzione dello
 // storico movimenti non hanno il campo history — lo aggiungiamo al volo
 // la prima volta che serve, senza richiedere nessuna azione all'utente.
+// Backfilla anche un id su ogni voce che ne fosse ancora priva (storico
+// creato prima dell'introduzione della cancellazione per singola riga):
+// senza un id stabile non sapremmo quale riga esatta rimuovere.
 function ensurePocketHistory(pocket){
   if(!Array.isArray(pocket.history)) pocket.history = []
+  pocket.history.forEach(h => { if(!h.id) h.id = genId('ph') })
   return pocket.history
 }
 
@@ -2701,7 +2709,7 @@ function ensurePocketHistory(pocket){
 function addPocketHistoryEntry(pocket, type, amountCents, note){
   const history = ensurePocketHistory(pocket)
   history.unshift({
-    type, amountCents, note: note || '',
+    id: genId('ph'), type, amountCents, note: note || '',
     dt: new Date().toISOString().split('T')[0]
   })
 }
@@ -3126,6 +3134,8 @@ const POCKET_HISTORY_META = {
 function renderPocketHistory(pocket){
   const listEl = document.getElementById('pocket-history-list')
   const history = ensurePocketHistory(pocket)
+  const clearBtn = document.getElementById('pocket-clear-history-btn')
+  if(clearBtn) clearBtn.style.display = history.length ? 'inline' : 'none'
 
   if(!history.length){
     listEl.innerHTML = `<div style="text-align:center;padding:16px 8px;color:var(--text3);font-size:.8rem">
@@ -3143,11 +3153,59 @@ function renderPocketHistory(pocket){
         <div class="cb-label" style="font-size:.8rem">${meta.label}${h.note?' · '+escapeHtml(h.note):''}</div>
         <div style="font-size:.65rem;color:var(--text3);margin-top:1px">${fmtDateShort(h.dt)}</div>
       </div>
-      <div class="cb-right">
+      <div class="cb-right" style="display:flex;align-items:center;gap:8px">
         <div class="cb-amounts" style="font-weight:700;color:${meta.color}">${meta.sign}${fmt(amountAbs)}</div>
+        <span onclick="event.stopPropagation();deletePocketHistoryEntry('${h.id}')"
+          style="color:var(--text3);cursor:pointer;font-size:.9rem;padding:2px 4px" title="Elimina questa voce">✕</span>
       </div>
     </div>`
   }).join('')
+}
+
+// Svuota SOLO lo storico movimenti del Pocket — a differenza di
+// "Elimina Pocket" (che cancella tutto: saldo, obiettivo, trasferimento
+// ricorrente collegato), qui restano intatti saldo e configurazione,
+// sparisce solo il log dei movimenti passati. Utile per un Pocket "vecchio"
+// con centinaia di righe accumulate nel tempo che non servono più a scopo
+// di consultazione, senza dover ricreare da capo il Pocket per ripulirlo.
+function confirmClearPocketHistory(){
+  const accId = document.getElementById('pockets-acc-id').value
+  const pocketId = document.getElementById('pocket-detail-id').value
+  const pocket = getPockets(accId).find(p=>p.id===pocketId)
+  if(!pocket || !ensurePocketHistory(pocket).length) return
+
+  const ok = confirm('Svuotare lo storico movimenti di questo Pocket? Il saldo accantonato e le impostazioni restano invariati — verrà cancellato solo il log dei movimenti passati, in modo irreversibile.')
+  if(!ok) return
+
+  pocket.history = []
+  saveAccounts()
+  renderPocketHistory(pocket)
+  showToast('🗑 Storico movimenti svuotato')
+}
+
+// Elimina UNA SOLA voce dallo storico movimenti del Pocket. Importante:
+// lo storico è solo un LOG di consultazione — il saldo (pocket.balCents)
+// è già stato aggiornato quando il movimento è avvenuto, e resta tale.
+// Cancellare una riga qui non "annulla" quel movimento né tocca il saldo,
+// serve solo a ripulire il registro da voci che non servono più tenere.
+// Per annullare davvero un movimento (restituire i soldi, storno reale)
+// si usa "⬇️ Accantona"/"⬆️ Preleva" in senso opposto, non questa funzione.
+function deletePocketHistoryEntry(entryId){
+  const accId = document.getElementById('pockets-acc-id').value
+  const pocketId = document.getElementById('pocket-detail-id').value
+  const pocket = getPockets(accId).find(p=>p.id===pocketId)
+  if(!pocket) return
+  const history = ensurePocketHistory(pocket)
+  const idx = history.findIndex(h => h.id === entryId)
+  if(idx === -1) return
+
+  const ok = confirm('Eliminare questa voce dallo storico? Il saldo del Pocket non viene modificato — resta solo il log di questo movimento a sparire.')
+  if(!ok) return
+
+  history.splice(idx, 1)
+  saveAccounts()
+  renderPocketHistory(pocket)
+  showToast('🗑 Voce eliminata dallo storico')
 }
 
 function confirmDeletePocket(){
@@ -3505,6 +3563,17 @@ function txMatchesQuery(tx, ql){
   const catName=(c.n||'').toLowerCase()
   const noteText=(tx.note||'').toLowerCase()
   if(desc.includes(ql) || catName.includes(ql) || noteText.includes(ql)) return true
+
+  // Trasferimenti: cerchiamo anche nei nomi dei conti coinvolti (mittente
+  // e destinatario). Senza questo, se l'utente sovrascrive la descrizione
+  // di default "ContoA → ContoB" con una nota personalizzata (es. "Rimborso
+  // vacanza"), il nome del conto destinatario sparirebbe del tutto dalla
+  // ricerca testuale — pur essendo un'informazione reale della transazione.
+  if(tx.t==='transfer'){
+    const fromName=(acc(tx.acc)?.n||'').toLowerCase()
+    const toName=(acc(tx.toAcc)?.n||'').toLowerCase()
+    if(fromName.includes(ql) || toName.includes(ql)) return true
+  }
 
   // Matching importo: confronta sia con la virgola (formato IT) sia
   // col punto, e anche solo la parte intera (es. "12" trova "12,50").
@@ -4474,11 +4543,16 @@ function renderTxTab(){
   const dateFrom=(document.getElementById('t-date-from')||{value:''}).value
   const dateTo=(document.getElementById('t-date-to')||{value:''}).value
 
+  // Bottone "✕ Azzera filtri" visibile solo se c'è davvero qualcosa da
+  // azzerare — niente pulsante inutile quando la vista è già pulita.
+  const resetBtn = document.getElementById('tx-reset-all-btn')
+  if(resetBtn) resetBtn.style.display = (q || type || catFilter || accFilter || dateFrom || dateTo) ? 'inline-flex' : 'none'
+
   let list=[...TX].sort((a,b)=>b.dt.localeCompare(a.dt))
 
   // Stesso matching potenziato della ricerca globale: testo su
-  // descrizione/categoria E importo (con virgola o punto), non solo
-  // un includes() sulla descrizione come prima.
+  // descrizione/categoria/importo, e — per i trasferimenti — anche sui
+  // nomi dei conti coinvolti (mittente e destinatario). Vedi txMatchesQuery.
   if(q){
     const ql=q.toLowerCase()
     list=list.filter(t=>txMatchesQuery(t,ql))
@@ -4503,7 +4577,13 @@ function toggleTxAdvancedFilters(){
   panel.style.display=isOpen?'none':'block'
   chevron.textContent=isOpen?'▾':'▴'
 }
+// Azzera TUTTI i filtri della tab Transazioni in un colpo solo — testo di
+// ricerca e tipo (sempre visibili) più categoria/metodo/date (nel pannello
+// avanzato), non solo questi ultimi come faceva prima. Un solo bottone,
+// richiamabile sia da qui sia da dentro il pannello avanzato stesso.
 function clearTxAdvancedFilters(){
+  document.getElementById('t-search').value=''
+  document.getElementById('t-type').value=''
   document.getElementById('t-cat').value=''
   document.getElementById('t-acc').value=''
   document.getElementById('t-date-from').value=''
