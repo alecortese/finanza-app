@@ -2705,12 +2705,17 @@ function ensurePocketHistory(pocket){
 // 'auto' (trasferimento ricorrente automatico), 'expense' (spesa
 // ricorrente pagata da qui), 'refund' (rimborso ricevuto — usato per
 // gli abbonamenti condivisi). note è un testo libero opzionale, utile
-// per esempio per annotare da chi arriva un rimborso.
-function addPocketHistoryEntry(pocket, type, amountCents, note){
+// per esempio per annotare da chi arriva un rimborso. dt è opzionale:
+// se omesso usa la data di oggi (corretto per un'azione fatta "adesso",
+// es. accantona/preleva a mano) — ma per un movimento generato dal
+// catch-up di mesi arretrati va sempre passata la vera data del mese a
+// cui si riferisce, altrimenti 6 mesi recuperati in un colpo solo
+// finirebbero tutti timbrati con la data di oggi, indistinguibili tra loro.
+function addPocketHistoryEntry(pocket, type, amountCents, note, dt){
   const history = ensurePocketHistory(pocket)
   history.unshift({
     id: genId('ph'), type, amountCents, note: note || '',
-    dt: new Date().toISOString().split('T')[0]
+    dt: dt || new Date().toISOString().split('T')[0]
   })
 }
 
@@ -2768,7 +2773,7 @@ function deletePocket(accId, pocketId){
 //    il Pocket si svuota/riempie ma il saldo totale del conto resta
 //    starato (bug storico: la spesa veniva registrata come transazione
 //    ma il saldo non si riduceva mai).
-function adjustPocketBalance(accId, pocketId, deltaCents, type, note){
+function adjustPocketBalance(accId, pocketId, deltaCents, type, note, dt){
   const pocket = getPockets(accId).find(p=>p.id===pocketId)
   if(!pocket) return false
   if(deltaCents < 0 && pocket.balCents + deltaCents < 0) return false // non si può prelevare più di quanto c'è
@@ -2786,7 +2791,7 @@ function adjustPocketBalance(accId, pocketId, deltaCents, type, note){
     adjustAccountBalance(accId, deltaCents)
   }
 
-  addPocketHistoryEntry(pocket, movementType, deltaCents, note)
+  addPocketHistoryEntry(pocket, movementType, deltaCents, note, dt)
   saveAccounts()
   return true
 }
@@ -2840,7 +2845,7 @@ function processPocketRecurringTransfers(){
 
         pocket.balCents += rt.amountCents
         const dt = ym+'-'+String(dueDay).padStart(2,'0')
-        ensurePocketHistory(pocket).unshift({ type:'auto', amountCents:rt.amountCents, note:'', dt })
+        ensurePocketHistory(pocket).unshift({ id: genId('ph'), type:'auto', amountCents:rt.amountCents, note:'', dt })
         rt.lastAppliedYm = ym
         appliedCount++
       })
@@ -3146,6 +3151,15 @@ function renderPocketHistory(pocket){
 
   listEl.innerHTML = history.map(h=>{
     const meta = POCKET_HISTORY_META[h.type] || POCKET_HISTORY_META.add
+    // FIX: prima il segno/colore veniva preso da meta.sign/meta.color,
+    // fissi per ogni TIPO (es. 'refund' sempre "+verde"). Ma un
+    // annullamento (vedi revertPocketEffectOfTx) può registrare un
+    // movimento con tipo 'refund' che in realtà TOGLIE soldi dal Pocket
+    // (deltaCents negativo) — mostrarlo comunque in verde col "+" è
+    // fuorviante. Il segno giusto è sempre quello del numero vero.
+    const isPositive = h.amountCents >= 0
+    const sign = isPositive ? '+' : '−'
+    const color = isPositive ? 'var(--green)' : 'var(--red)'
     const amountAbs = Math.abs(h.amountCents)
     return `<div class="cb-row" style="padding:9px 0">
       <div class="cb-icon" style="background:rgba(109,40,217,.1);width:30px;height:30px;font-size:.85rem">${meta.icon}</div>
@@ -3154,7 +3168,7 @@ function renderPocketHistory(pocket){
         <div style="font-size:.65rem;color:var(--text3);margin-top:1px">${fmtDateShort(h.dt)}</div>
       </div>
       <div class="cb-right" style="display:flex;align-items:center;gap:8px">
-        <div class="cb-amounts" style="font-weight:700;color:${meta.color}">${meta.sign}${fmt(amountAbs)}</div>
+        <div class="cb-amounts" style="font-weight:700;color:${color}">${sign}${fmt(amountAbs)}</div>
         <span onclick="event.stopPropagation();deletePocketHistoryEntry('${h.id}')"
           style="color:var(--text3);cursor:pointer;font-size:.9rem;padding:2px 4px" title="Elimina questa voce">✕</span>
       </div>
@@ -4069,7 +4083,7 @@ function processRecurringTransactions(){
         // è quello che effettivamente paga l'abbonamento, non il resto
         // della liquidità del conto.
         if(r.pocketId){
-          const sufficiente = adjustPocketBalance(r.acc, r.pocketId, -r.amountCents, 'expense', r.desc)
+          const sufficiente = adjustPocketBalance(r.acc, r.pocketId, -r.amountCents, 'expense', r.desc, dt)
           if(!sufficiente) return // salta silenziosamente questo mese se il Pocket non ha fondi sufficienti
         }
 
