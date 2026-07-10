@@ -1511,7 +1511,8 @@ if(localStorage.getItem('finapp-theme') === 'dark'){
       <div style="font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin-bottom:6px;margin-top:18px">Valore totale</div>
       <div class="tr-hero-amount" id="tr-total-val">€ 0,00</div>
       <div class="tr-hero-sub">
-        <span id="tr-invested-lbl" style="opacity:.6;font-size:.78rem">Investito: —</span>
+        <span id="tr-market-val-lbl" style="opacity:.6;font-size:.78rem">Mercato: —</span>
+        <span id="tr-liquidity-lbl" style="opacity:.6;font-size:.78rem">Liquidità: —</span>
       </div>
       <!-- Interessi liquidità -->
       <div class="tr-cash-bar" onclick="openTrInterestSheet()" style="cursor:pointer">
@@ -6255,7 +6256,12 @@ function renderTR(){
 
   // Hero
   document.getElementById('tr-total-val').textContent=fmt(totalCurrent)
-  document.getElementById('tr-invested-lbl').textContent='Investito: '+fmt(totalInvested)
+  // Valore di mercato dei soli ETF, esclusa la liquidità — lo stesso numero
+  // che si otterrebbe sommando a mano ogni riga del Portafoglio qui sotto.
+  // totalCurrent è già "liquidità + mercato ETF" (vedi trTotals()), quindi
+  // basta sottrarre la liquidità per isolare la sola parte investita.
+  document.getElementById('tr-market-val-lbl').textContent='Mercato: '+fmt(totalCurrent - TR_DATA.cashCents)
+  document.getElementById('tr-liquidity-lbl').textContent='Liquidità: '+fmt(TR_DATA.cashCents)
 
   // Salviamo i valori correnti sul badge stesso (data-*), così il toggle
   // può aggiornare il testo senza dover ricalcolare trTotals() di nuovo.
