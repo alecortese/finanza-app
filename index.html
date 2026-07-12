@@ -1990,6 +1990,10 @@ if(localStorage.getItem('finapp-theme') === 'dark'){
       <input class="form-input" type="number" id="pocket-move-amount" placeholder="0,00" min="0.01" step="0.01"
         style="font-family:var(--mono);font-weight:700">
     </div>
+    <div class="form-group">
+      <label class="form-label">Data (facoltativa, di default oggi)</label>
+      <input class="form-input" type="date" id="pocket-move-date">
+    </div>
     <button class="btn-submit" onclick="confirmPocketMove()">Confirma</button>
   </div>
 </div>
@@ -3255,6 +3259,7 @@ function openPocketMoveSheet(direction){
 
   document.getElementById('pocket-move-direction').value = direction
   document.getElementById('pocket-move-amount').value = ''
+  document.getElementById('pocket-move-date').value = new Date().toISOString().split('T')[0]
   document.getElementById('pocket-move-title').textContent = direction==='add' ? 'Accantona nel Pocket' : 'Preleva dal Pocket'
 
   const spendable = getAccountSpendableBalance(accId)
@@ -3275,14 +3280,20 @@ function confirmPocketMove(){
   const amount = parseFloat(document.getElementById('pocket-move-amount').value)
   if(!amount || amount<=0){ showToast('⚠️ Importo non valido'); return }
   const amountCents = Math.round(amount*100) // ← invariante centesimi interi
+  // Facoltativa: permette di registrare un accantonamento/prelievo con una
+  // data passata reale (es. "questo l'ho messo da parte il 21 gennaio"),
+  // invece di forzare sempre la data odierna. Se lasciata vuota, il campo
+  // è comunque precompilato con oggi da openPocketMoveSheet — quindi qui
+  // il fallback serve solo come rete di sicurezza.
+  const dt = document.getElementById('pocket-move-date').value || new Date().toISOString().split('T')[0]
 
   if(direction==='add'){
     const spendable = getAccountSpendableBalance(accId)
     if(amountCents > spendable){ showToast('⚠️ Saldo spendibile insufficiente'); return }
-    adjustPocketBalance(accId, pocketId, amountCents)
+    adjustPocketBalance(accId, pocketId, amountCents, null, null, dt)
     showToast('⬇️ '+fmt(amountCents)+' accantonati')
   } else {
-    const ok = adjustPocketBalance(accId, pocketId, -amountCents)
+    const ok = adjustPocketBalance(accId, pocketId, -amountCents, null, null, dt)
     if(!ok){ showToast('⚠️ Importo superiore al saldo del Pocket'); return }
     showToast('⬆️ '+fmt(amountCents)+' prelevati')
   }
