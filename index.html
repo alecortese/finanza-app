@@ -5563,7 +5563,7 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
       // 2) Applichiamo il nuovo movimento con i valori aggiornati — sul
       // Pocket se ne è stato scelto uno, altrimenti direttamente sul conto
       // (nuovo comportamento: prima solo il ramo Pocket veniva applicato).
-      const newTxForBalance = {t:_type, acc:accId, a:newAmountCents, pocketId:newPocketId, d:desc}
+      const newTxForBalance = {t:_type, acc:accId, a:newAmountCents, pocketId:newPocketId, d:desc, dt:date}
       if(!reapplyTxBalanceEffect(newTxForBalance)){
         // Il vecchio movimento è già stato annullato al passo 1: se
         // qui falliamo, ripristiniamo subito quello vecchio per non
@@ -5619,7 +5619,7 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
     // Nota: qui l'importo resta SEMPRE quello pieno (amountCents), anche
     // per un abbonamento condiviso — è l'intero addebito che esce
     // davvero dal Pocket/conto, coerente con processRecurringTransactions.
-    const newTxForBalance = {t:_type, acc:accId, a:amountCents, pocketId, d:desc}
+    const newTxForBalance = {t:_type, acc:accId, a:amountCents, pocketId, d:desc, dt:date}
     const pocketMoveOk = reapplyTxBalanceEffect(newTxForBalance)
     if(!pocketMoveOk){
       showToast('⚠️ Saldo Pocket insufficiente per questa spesa')
@@ -6801,7 +6801,7 @@ function reapplyPocketEffectOfTx(tx){
   const isExpense = tx.t==='expense'
   const movementType = isExpense ? 'expense' : 'refund'
   const deltaCents = isExpense ? -tx.a : tx.a // stesso segno di quando la TX fu creata
-  return adjustPocketBalance(tx.acc, tx.pocketId, deltaCents, movementType, tx.d)
+  return adjustPocketBalance(tx.acc, tx.pocketId, deltaCents, movementType, tx.d, tx.dt)
 }
 
 function undoDelete(){
