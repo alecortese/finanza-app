@@ -5697,6 +5697,7 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
   }
   closeSheet()
   saveTX()
+  saveAccounts() // ← FIX: mancava — senza questa riga, il saldo di una transazione NON collegata a un Pocket cambiava solo in memoria e spariva al ricaricamento della pagina
   renderHome()
   renderTxTab()
   renderTR() // aggiorna subito cash/asset/contatori se questa spesa era su Trade Republic
@@ -6758,11 +6759,13 @@ function deleteTx(id){
     setTimeout(()=>{
       TX=TX.filter(t=>String(t.id)!==String(id))
       saveTX()
+      saveAccounts() // ← FIX: stesso bug di saveTransaction(), mancava per le eliminazioni
       renderHome(); renderTxTab()
     },400)
   } else {
     TX=TX.filter(t=>String(t.id)!==String(id))
     saveTX()
+    saveAccounts() // ← FIX: idem
     renderHome(); renderTxTab()
   }
   // Se il Pocket non aveva fondi sufficienti per essere "riprelevato"
@@ -6825,6 +6828,7 @@ function undoDelete(){
   if(_toastTimer) clearTimeout(_toastTimer)
   document.getElementById('toast').classList.remove('show')
   saveTX()
+  saveAccounts() // ← FIX: stesso bug, mancava anche qui
   renderHome(); renderTxTab()
   showToast(pocketReapplyFailed
     ? '↩️ Ripristinata — saldo Pocket insufficiente per il movimento originale'
@@ -8921,6 +8925,7 @@ function addQuickExpense(id) {
     dt:  today
   });
   saveTX()
+  saveAccounts() // ← FIX: stesso bug, mancava anche per le spese rapide
   trApplyCardAutomations(accId, type, it.amountCents, today) // Saveback/Round Up se pagata con Trade Republic
   renderHome();
   renderTxTab();
