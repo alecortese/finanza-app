@@ -5563,7 +5563,7 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
       // 2) Applichiamo il nuovo movimento con i valori aggiornati — sul
       // Pocket se ne è stato scelto uno, altrimenti direttamente sul conto
       // (nuovo comportamento: prima solo il ramo Pocket veniva applicato).
-      const newTxForBalance = {t:_type, acc:accId, a:newAmountCents, pocketId:newPocketId, d:desc, dt:date}
+      const newTxForBalance = {t:_type, acc:accId, a:newAmountCents, pocketId:newPocketId, d:desc}
       if(!reapplyTxBalanceEffect(newTxForBalance)){
         // Il vecchio movimento è già stato annullato al passo 1: se
         // qui falliamo, ripristiniamo subito quello vecchio per non
@@ -5619,7 +5619,7 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
     // Nota: qui l'importo resta SEMPRE quello pieno (amountCents), anche
     // per un abbonamento condiviso — è l'intero addebito che esce
     // davvero dal Pocket/conto, coerente con processRecurringTransactions.
-    const newTxForBalance = {t:_type, acc:accId, a:amountCents, pocketId, d:desc, dt:date}
+    const newTxForBalance = {t:_type, acc:accId, a:amountCents, pocketId, d:desc}
     const pocketMoveOk = reapplyTxBalanceEffect(newTxForBalance)
     if(!pocketMoveOk){
       showToast('⚠️ Saldo Pocket insufficiente per questa spesa')
@@ -5697,7 +5697,6 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
   }
   closeSheet()
   saveTX()
-  saveAccounts() // ← FIX: mancava — senza questa riga, il saldo di una transazione NON collegata a un Pocket cambiava solo in memoria e spariva al ricaricamento della pagina
   renderHome()
   renderTxTab()
   renderTR() // aggiorna subito cash/asset/contatori se questa spesa era su Trade Republic
@@ -6087,17 +6086,41 @@ function trRevertOpEffect(op){
     const idx = TR_DATA.assets.findIndex(a=>a.id===op.assetSnapshotBefore.id)
     if(idx===-1) TR_DATA.assets.push(JSON.parse(JSON.stringify(op.assetSnapshotBefore)))
     else TR_DATA.assets[idx] = JSON.parse(JSON.stringify(op.assetSnapshotBefore))
-    TR_DATA.cashCents += op.amountCents + fee
+    TR_DATA.cashCents += op.amountCents
     return true
   }
   if(op.type==='manual' && op.amountCents<0){
-    TR_DATA.cashCents += op.amountCents + fee
+    TR_DATA.cashCents += op.amountCents
     return true
   }
-  if(['buy','manual','roundup','saveback'].includes(op.type)){
+  if(op.type==='roundup'){
+    // Il pot del Round Up era già stato scalato da cashCents molto prima,
+    // spesa per spesa, in trApplyCardAutomations — a questo punto (e da
+    // quando la commissione esce dal pot stesso, mai dalla cassa) la
+    // cassa reale non è mai stata toccata da questa operazione. Il fix
+    // corretto è restituire l'intero importo allo stato "in sospeso" da
+    // cui proveniva, pronto per essere reinvestito al prossimo martedì
+    // utile, invece di farlo sparire nel nulla o raddoppiarlo come cash
+    // spendibile (bug originale).
     trRemoveInvestmentLot(op)
-    if(op.type==='saveback') TR_DATA.cashCents += fee
-    else TR_DATA.cashCents += op.amountCents + fee
+    TR_DATA.roundupPendingCents = (TR_DATA.roundupPendingCents||0) + op.amountCents
+    // Se l'ultimo investimento registrato era proprio questo, "sblocchiamo"
+    // la data così il pot ritornato in sospeso può essere reinvestito al
+    // prossimo martedì invece di restare bloccato dal controllo
+    // "già investito per questa settimana" in trTryInvestPending.
+    if(TR_DATA.lastRoundupInvestYmd === op.dt) TR_DATA.lastRoundupInvestYmd = null
+    return true
+  }
+  if(op.type==='saveback'){
+    // Il cashback non è mai uscito dalla liquidità reale, nemmeno per la
+    // commissione (che ora viene sempre presa dal pot stesso): cancellare
+    // questa operazione non deve quindi restituire nulla alla cassa.
+    trRemoveInvestmentLot(op)
+    return true
+  }
+  if(['buy','manual'].includes(op.type)){
+    trRemoveInvestmentLot(op)
+    TR_DATA.cashCents += op.amountCents
     return true
   }
   return false
@@ -6162,17 +6185,22 @@ function processTrPlans(){
 
       const existingAsset = TR_DATA.assets.find(a=>a.etf===plan.etf)
       const priceUnits = existingAsset ? existingAsset.currPriceUnits : priceToUnits(100) // stima di fallback (100€) se l'ETF non è mai stato comprato
-      const shares = roundShares((plan.amountCents * TR_PRICE_TO_CENTS) / priceUnits)
       const dt = ym+'-'+String(dueDay).padStart(2,'0')
 
       const feeCents = existingAsset ? 0 : TR_BUY_FEE_CENTS
+      // Come nella vera app: la commissione esce dall'importo che hai
+      // deciso di investire, non si aggiunge sopra — investendo 20€ su
+      // un ETF nuovo, solo 19€ diventano davvero quote (il resto è il
+      // costo fisso d'ingresso).
+      const netInvestCents = Math.max(0, plan.amountCents - feeCents)
+      const shares = roundShares((netInvestCents * TR_PRICE_TO_CENTS) / priceUnits)
 
       // L'acquisto esce dalla liquidità Trade Republic; se non basta,
       // saltiamo questo mese senza bloccare gli altri piani (lo stesso
       // approccio già usato per i trasferimenti ricorrenti finanziari).
-      if(TR_DATA.cashCents < plan.amountCents + feeCents) return
-      trAddLotToAsset(plan.etf, shares, priceUnits, dt)
-      TR_DATA.cashCents -= (plan.amountCents + feeCents)
+      if(TR_DATA.cashCents < plan.amountCents) return
+      if(shares>0) trAddLotToAsset(plan.etf, shares, priceUnits, dt)
+      TR_DATA.cashCents -= plan.amountCents
 
       TR_DATA.ops.unshift({
         id: genId('op'), type:'buy', etf:plan.etf, amountCents:plan.amountCents,
@@ -6273,8 +6301,13 @@ function trProcessPendingAutomationInvestments(){
 
 // fromOwnCash qui riguarda SOLO l'importo accantonato: per il round up la
 // liquidità è già stata scalata al momento dell'accantonamento (sopra), a
-// questo punto si tratta solo di trasformarlo in un vero lotto ETF — l'unica
-// spesa di liquidità possibile qui è l'eventuale commissione per un ETF nuovo.
+// questo punto si tratta solo di trasformarlo in un vero lotto ETF. La
+// commissione per un ETF nuovo (come nella vera app) esce SEMPRE dal pot
+// accantonato stesso, riducendo le quote nette comprate — mai dalla
+// liquidità reale, che qui non viene mai toccata (fromOwnCash è sempre
+// false per Saveback/Round Up: coerente col fatto che quei soldi sono già
+// usciti — o non sono mai stati "tuoi" nel caso del cashback — prima
+// ancora che questa funzione venga chiamata).
 function trTryInvestPending(kind, etfId, dueYmd, fromOwnCash){
   const pendingField = kind==='saveback' ? 'savebackPendingCents' : 'roundupPendingCents'
   const lastField = kind==='saveback' ? 'lastSavebackInvestYmd' : 'lastRoundupInvestYmd'
@@ -6284,15 +6317,16 @@ function trTryInvestPending(kind, etfId, dueYmd, fromOwnCash){
 
   const existingAsset = TR_DATA.assets.find(a=>a.etf===etfId)
   const feeCents = existingAsset ? 0 : TR_BUY_FEE_CENTS
-  const cashNeeded = (fromOwnCash ? pendingCents : 0) + feeCents
-  // Se manca liquidità anche solo per la commissione fissa, saltiamo per ora
-  // e ritentiamo al prossimo controllo (prossimo avvio app o prossima spesa
-  // TR) — l'accantonato NON si perde, resta lì in attesa.
+  const netInvestCents = Math.max(0, pendingCents - feeCents)
+  const cashNeeded = fromOwnCash ? pendingCents : 0
+  // Se manca liquidità (solo quando fromOwnCash è true, oggi mai per
+  // queste due automazioni) saltiamo per ora e ritentiamo al prossimo
+  // controllo — l'accantonato NON si perde, resta lì in attesa.
   if(cashNeeded>0 && TR_DATA.cashCents < cashNeeded) return false
 
   const priceUnits = existingAsset ? existingAsset.currPriceUnits : priceToUnits(100) // stessa stima di fallback dei piani automatici
-  const shares = roundShares((pendingCents * TR_PRICE_TO_CENTS) / priceUnits)
-  trAddLotToAsset(etfId, shares, priceUnits, dueYmd)
+  const shares = roundShares((netInvestCents * TR_PRICE_TO_CENTS) / priceUnits)
+  if(shares>0) trAddLotToAsset(etfId, shares, priceUnits, dueYmd)
   if(cashNeeded>0) TR_DATA.cashCents -= cashNeeded
   TR_DATA.ops.unshift({
     id: genId('op'), type: kind, etf: etfId, amountCents: pendingCents,
@@ -6759,13 +6793,11 @@ function deleteTx(id){
     setTimeout(()=>{
       TX=TX.filter(t=>String(t.id)!==String(id))
       saveTX()
-      saveAccounts() // ← FIX: stesso bug di saveTransaction(), mancava per le eliminazioni
       renderHome(); renderTxTab()
     },400)
   } else {
     TX=TX.filter(t=>String(t.id)!==String(id))
     saveTX()
-    saveAccounts() // ← FIX: idem
     renderHome(); renderTxTab()
   }
   // Se il Pocket non aveva fondi sufficienti per essere "riprelevato"
@@ -6801,7 +6833,7 @@ function reapplyPocketEffectOfTx(tx){
   const isExpense = tx.t==='expense'
   const movementType = isExpense ? 'expense' : 'refund'
   const deltaCents = isExpense ? -tx.a : tx.a // stesso segno di quando la TX fu creata
-  return adjustPocketBalance(tx.acc, tx.pocketId, deltaCents, movementType, tx.d, tx.dt)
+  return adjustPocketBalance(tx.acc, tx.pocketId, deltaCents, movementType, tx.d)
 }
 
 function undoDelete(){
@@ -6828,7 +6860,6 @@ function undoDelete(){
   if(_toastTimer) clearTimeout(_toastTimer)
   document.getElementById('toast').classList.remove('show')
   saveTX()
-  saveAccounts() // ← FIX: stesso bug, mancava anche qui
   renderHome(); renderTxTab()
   showToast(pocketReapplyFailed
     ? '↩️ Ripristinata — saldo Pocket insufficiente per il movimento originale'
@@ -7236,7 +7267,11 @@ function saveTrAsset(){
 
     const isNewEtf = !existingAsset
     const feeCents = isNewEtf ? TR_BUY_FEE_CENTS : 0
-    const cashNeeded = newCostCents + feeCents
+    // Come nella vera app: la commissione d'ingresso è già "dentro" quanto
+    // hai investito, non si aggiunge sopra — la cassa scende esattamente
+    // dell'importo della posizione che stai registrando, la commissione
+    // resta solo un dato informativo (mostrato nello storico operazioni).
+    const cashNeeded = newCostCents
     if(TR_DATA.cashCents < cashNeeded){
       showToast(`⚠️ Liquidità Trade Republic insufficiente (disponibile: ${fmt(TR_DATA.cashCents)}, servono: ${fmt(cashNeeded)})`)
       return
@@ -7253,6 +7288,9 @@ function saveTrAsset(){
     TR_DATA.ops.unshift({
       id: genId('op'), type:'manual', etf, amountCents: newCostCents,
       shares: sharesRounded, priceUnits: avgUnits, dt: todayYmd, fee: feeCents
+      // nota: fee è solo informativa qui (mostrata nello storico) — non
+      // viene più sommata a newCostCents nel calcolo della cassa, vedi
+      // cashNeeded sopra.
     })
     showToast('✅ Posizione aggiunta!')
   }
@@ -8925,7 +8963,6 @@ function addQuickExpense(id) {
     dt:  today
   });
   saveTX()
-  saveAccounts() // ← FIX: stesso bug, mancava anche per le spese rapide
   trApplyCardAutomations(accId, type, it.amountCents, today) // Saveback/Round Up se pagata con Trade Republic
   renderHome();
   renderTxTab();
