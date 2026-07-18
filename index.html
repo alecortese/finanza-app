@@ -2636,7 +2636,11 @@ window.resetAppState = resetAppState
 const fmt=c=>new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(c/100)
 const fmtShort=c=>{const v=Math.abs(c/100);return v>=1000?(v/1000).toFixed(1)+'k':''+v.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2})}
 const cat=id=>CATS.find(c=>c.id===id)||CATS[CATS.length-1]
-const acc=id=>ACCOUNTS.find(a=>a.id===id)||ACCOUNTS[0]
+const acc=id=>{
+  const found=ACCOUNTS.find(a=>a.id===id)
+  if(!found) console.warn(`⚠️ acc('${id}') non trovato — ripiego su ACCOUNTS[0] (${ACCOUNTS[0]?.n}). Se non è voluto, controlla chi ha chiamato adjustAccountBalance con un accId mancante o sbagliato.`)
+  return found||ACCOUNTS[0]
+}
 const fmtDateShort=str=>{const d=new Date(str+'T12:00:00');return d.toLocaleDateString('it-IT',{day:'numeric',month:'short'})}
 
 // ── SALDO CONTO: Trade Republic è un caso speciale ──────────────────────────
@@ -5563,7 +5567,15 @@ function saveTransaction() {//aggiunto per sistemare il bug della modifica trans
       // 2) Applichiamo il nuovo movimento con i valori aggiornati — sul
       // Pocket se ne è stato scelto uno, altrimenti direttamente sul conto
       // (nuovo comportamento: prima solo il ramo Pocket veniva applicato).
-      const newTxForBalance = {t:_type, acc:accId, a:newAmountCents, pocketId:newPocketId, d:desc}
+      // IMPORTANTE: toAcc va sempre incluso, ereditato dalla transazione
+      // originale — per un trasferimento, ometterlo faceva sì che
+      // adjustAccountBalance ricevesse un accId undefined, e la funzione
+      // acc() ripiega silenziosamente sul primo conto della lista (Casa)
+      // invece di segnalare l'errore: l'aggiustamento finiva applicato
+      // due volte sul conto di origine invece che su origine+destinazione,
+      // corrompendo silenziosamente entrambi i saldi di un trasferimento
+      // ogni volta che se ne modificava l'importo (o qualsiasi altro campo).
+      const newTxForBalance = {t:_type, acc:accId, toAcc:originalTx.toAcc, a:newAmountCents, pocketId:newPocketId, d:desc}
       if(!reapplyTxBalanceEffect(newTxForBalance)){
         // Il vecchio movimento è già stato annullato al passo 1: se
         // qui falliamo, ripristiniamo subito quello vecchio per non
